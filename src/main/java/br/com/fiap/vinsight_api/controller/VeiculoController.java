@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.controller;
 
+import br.com.fiap.vinsight_api.agendamento.AgendamentoService;
+import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
 import br.com.fiap.vinsight_api.veiculo.DadosAtualizacaoVeiculo;
 import br.com.fiap.vinsight_api.veiculo.DadosCadastroVeiculo;
 import br.com.fiap.vinsight_api.veiculo.DadosDetalheVeiculo;
@@ -30,6 +32,9 @@ public class VeiculoController {
 
     @Autowired
     private VeiculoService service;
+
+    @Autowired
+    private AgendamentoService agendamentoService;
 
     @PostMapping
     @Operation(summary = "Cadastra um novo veículo")
@@ -74,5 +79,13 @@ public class VeiculoController {
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/agendamentos")
+    @Operation(summary = "Lista agendamentos de um veículo (paginado)")
+    public ResponseEntity<Page<DadosListagemAgendamento>> listarAgendamentos(
+            @PathVariable Long id,
+            @PageableDefault(size = 20, sort = "dataHora") Pageable paginacao) {
+        return ResponseEntity.ok(agendamentoService.listarPorVeiculo(id, paginacao));
     }
 }

@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.controller;
 
+import br.com.fiap.vinsight_api.agendamento.AgendamentoService;
+import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
 import br.com.fiap.vinsight_api.concessionaria.ConcessionariaService;
 import br.com.fiap.vinsight_api.concessionaria.DadosAtualizacaoConcessionaria;
 import br.com.fiap.vinsight_api.concessionaria.DadosCadastroConcessionaria;
@@ -30,6 +32,9 @@ public class ConcessionariaController {
 
     @Autowired
     private ConcessionariaService service;
+
+    @Autowired
+    private AgendamentoService agendamentoService;
 
     @PostMapping
     @Operation(summary = "Cadastra uma nova concessionária")
@@ -68,5 +73,13 @@ public class ConcessionariaController {
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/agendamentos")
+    @Operation(summary = "Lista agendamentos de uma concessionária (paginado)")
+    public ResponseEntity<Page<DadosListagemAgendamento>> listarAgendamentos(
+            @PathVariable Long id,
+            @PageableDefault(size = 20, sort = "dataHora") Pageable paginacao) {
+        return ResponseEntity.ok(agendamentoService.listarPorConcessionaria(id, paginacao));
     }
 }
