@@ -5,6 +5,8 @@ import br.com.fiap.vinsight_api.cliente.DadosAtualizacaoCliente;
 import br.com.fiap.vinsight_api.cliente.DadosCadastroCliente;
 import br.com.fiap.vinsight_api.cliente.DadosDetalheCliente;
 import br.com.fiap.vinsight_api.cliente.DadosListagemCliente;
+import br.com.fiap.vinsight_api.veiculo.DadosListagemVeiculo;
+import br.com.fiap.vinsight_api.veiculo.VeiculoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/clientes")
 @Tag(name = "Clientes", description = "Cadastro e gestão de clientes Ford")
@@ -30,6 +34,9 @@ public class ClienteController {
 
     @Autowired
     private ClienteService service;
+
+    @Autowired
+    private VeiculoService veiculoService;
 
     @PostMapping
     @Operation(summary = "Cadastra um novo cliente")
@@ -68,5 +75,11 @@ public class ClienteController {
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/veiculos")
+    @Operation(summary = "Lista os veículos de um cliente")
+    public ResponseEntity<List<DadosListagemVeiculo>> listarVeiculos(@PathVariable Long id) {
+        return ResponseEntity.ok(veiculoService.listarPorCliente(id));
     }
 }
