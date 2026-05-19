@@ -1,0 +1,84 @@
+package br.com.fiap.vinsight_api.lead;
+
+import br.com.fiap.vinsight_api.cliente.Cliente;
+import br.com.fiap.vinsight_api.veiculo.Veiculo;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "leads")
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(of = "id")
+public class Lead {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_id", nullable = false)
+    private Cliente cliente;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "veiculo_id", nullable = false)
+    private Veiculo veiculo;
+
+    private Double score;
+
+    @Enumerated(EnumType.STRING)
+    private PrioridadeLead prioridade;
+
+    @Enumerated(EnumType.STRING)
+    private StatusLead status;
+
+    @Column(length = 500)
+    private String motivo;
+
+    private LocalDateTime dataGeracao;
+
+    private LocalDateTime dataConversao;
+
+    @PrePersist
+    void prePersist() {
+        this.dataGeracao = LocalDateTime.now();
+        if (this.status == null) this.status = StatusLead.NOVO;
+    }
+
+    public Lead(DadosCadastroLead dados, Cliente cliente, Veiculo veiculo) {
+        this.cliente = cliente;
+        this.veiculo = veiculo;
+        this.score = dados.score();
+        this.prioridade = dados.prioridade();
+        this.motivo = dados.motivo();
+    }
+
+    public void atualizarStatus(StatusLead novoStatus) {
+        this.status = novoStatus;
+        if (novoStatus == StatusLead.CONVERTIDO && this.dataConversao == null) {
+            this.dataConversao = LocalDateTime.now();
+        }
+    }
+
+    public void marcarConvertido() {
+        this.status = StatusLead.CONVERTIDO;
+        this.dataConversao = LocalDateTime.now();
+    }
+}
