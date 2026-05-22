@@ -13,21 +13,7 @@ API REST que dá suporte à plataforma de retenção de clientes pós-venda da F
 
 ## Arquitetura
 
-<!-- COLOQUE AQUI O DIAGRAMA SVG -->
-<!-- Sugestão: salve o arquivo em `docs/architecture.svg` e referencie abaixo. -->
-
-![Diagrama de Arquitetura](docs/architecture.svg)
-
-> **TODO:** substituir o caminho acima pelo SVG entregue. Caminho sugerido: `docs/architecture.svg`.
-
-### Modelo de domínio
-
-```
-Concessionaria (1) ──── (N) Agendamento (N) ──── (1) Veiculo (N) ──── (1) Cliente
-                                                       │                     │
-                                                       └────── Lead ─────────┘
-                                                              (N) ─── (1)
-```
+<img width="2400" height="1600" alt="VINSight_Ford_SpringBoot_Diagram" src="https://github.com/user-attachments/assets/de02e88a-ea60-42ec-afe2-d9401cf54ba7" />
 
 ## Stack
 
