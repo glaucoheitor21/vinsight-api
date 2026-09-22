@@ -19,11 +19,13 @@ API REST que dá suporte à plataforma de retenção de clientes pós-venda da F
 
 - **Java 21** (LTS)
 - **Spring Boot 4.0.6** (com Jackson 3 e novos starters `spring-boot-starter-webmvc`)
-- Spring Web · Spring Data JPA · Validation
-- **MySQL 8** (banco de dados)
+- Spring Web · Spring Data JPA · Validation · **Actuator**
+- **Spring Security 7** + **java-jwt (Auth0) 4.6.0** — autenticação JWT (US-29)
+- **MySQL 8** (banco de dados) — inclusive na suíte de testes, em schema dedicado
 - **Flyway** (migrations versionadas)
 - **Lombok**
 - **SpringDoc OpenAPI** (Swagger UI auto-gerado)
+- **JaCoCo** (relatório de cobertura)
 
 ## Pré-requisitos
 
@@ -35,14 +37,19 @@ API REST que dá suporte à plataforma de retenção de clientes pós-venda da F
 
 ### 1. Configurar credenciais do MySQL
 
-Edite `src/main/resources/application.properties` se o seu MySQL usa user/senha diferentes do default:
+O default é `root` / `fiap`. Se o seu MySQL usa outras credenciais, **não edite o código** — passe por
+variável de ambiente:
 
-```properties
-spring.datasource.username=root
-spring.datasource.password=fiap
+```bash
+DB_USER=seu_usuario DB_PASSWORD=sua_senha ./mvnw spring-boot:run
 ```
 
+Variáveis reconhecidas: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`.
+
 A URL JDBC já tem `createDatabaseIfNotExist=true`, então o schema `vinsight` é criado automaticamente na primeira execução — não precisa rodar `CREATE DATABASE` manualmente.
+
+> Se aparecer `Public Key Retrieval is not allowed`, o MySQL 8 está usando `caching_sha2_password`.
+> A URL de dev já inclui `allowPublicKeyRetrieval=true` para resolver isso.
 
 ### 2. Subir a aplicação
 
@@ -56,7 +63,64 @@ ou, no Windows:
 mvnw.cmd spring-boot:run
 ```
 
-A API sobe em `http://localhost:8080`. Flyway aplica todas as migrations em `src/main/resources/db/migration/` na ordem (V1 → V5).
+A API sobe em `http://localhost:8080`. Flyway aplica todas as migrations em
+`src/main/resources/db/migration/` na ordem (V1 → V12) e, no perfil `dev`, também a massa de
+demonstração em `src/main/resources/db/seed/`.
+
+### 3. Conferir que subiu
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Deve responder `200` com `"status":"UP"`. Em seguida abra o Swagger em
+http://localhost:8080/swagger-ui.html.
+
+## Perfis de execução
+
+| Perfil | Banco | Massa de demonstração | Uso |
+|---|---|---|---|
+| `dev` (**default**) | MySQL local | sim (`db/seed`) | desenvolvimento e demonstração |
+| `prod` | MySQL via `DB_URL` | não | tudo por variável de ambiente, sem credencial no repo |
+| `test` | MySQL, schema `vinsight_test` | não | suíte automatizada — nunca toca o banco `vinsight` |
+
+```bash
+SPRING_PROFILES_ACTIVE=prod DB_URL=... DB_USER=... DB_PASSWORD=... ./mvnw spring-boot:run
+```
+
+## Usuários de demonstração
+
+Criados pelo seed do perfil `dev` (senhas em BCrypt no banco). Serão utilizáveis a partir da US-29,
+quando o endpoint de login existir.
+
+| E-mail | Senha | Perfil | Concessionária |
+|---|---|---|---|
+| `consultor@ford.com.br` | `consultor123` | CONSULTOR | Ford Morumbi (SP-001) |
+| `consultor.campinas@ford.com.br` | `consultor123` | CONSULTOR | Ford Campinas (SP-014) |
+| `gerente@ford.com.br` | `gerente123` | GERENTE | Ford Morumbi (SP-001) |
+| `analista@ford.com.br` | `analista123` | ANALISTA_FORD | — (rede inteira) |
+| `admin@ford.com.br` | `admin123` | ADMIN | — |
+
+Os dois consultores em unidades diferentes existem de propósito: são eles que provam o escopo de
+dados por concessionária da US-30.
+
+## Executar os testes
+
+```bash
+./mvnw verify
+```
+
+Roda no perfil `test`, que usa um **schema separado** `vinsight_test` no mesmo MySQL local. Ele é
+criado sozinho no primeiro `verify` e recebe apenas as migrations `V1→V12` — sem a massa de
+demonstração. Assim os testes nunca escrevem no banco `vinsight` usado na apresentação, e nunca
+dependem do que o seed deixou lá.
+
+Como o perfil usa `spring.jpa.hibernate.ddl-auto=validate`, o build também falha se uma entidade
+divergir do schema criado pelas migrations.
+
+Para zerar o banco de teste: `DROP DATABASE vinsight_test;` — ele é recriado na execução seguinte.
+
+O relatório JaCoCo fica em `target/site/jacoco/index.html`.
 
 ## Documentação interativa
 
@@ -212,12 +276,29 @@ Flyway controla o schema versionado. Migrations em `src/main/resources/db/migrat
 | V3 | `V3__create_veiculo_table.sql` | Tabela `veiculos` + FKs para `clientes` e `concessionarias` |
 | V4 | `V4__create_agendamento_table.sql` | Tabela `agendamentos` + FKs para `veiculos` e `concessionarias` |
 | V5 | `V5__create_lead_table.sql` | Tabela `leads` + FKs para `clientes` e `veiculos` |
+| V6 | `V6__create_usuario_table.sql` | Tabela `usuarios` (perfil + concessionária) — base da US-29/30 |
+| V7 | `V7__create_ordem_servico_table.sql` | Tabela `ordens_servico` — histórico e insumo do Service Share |
+| V8 | `V8__alter_lead_add_concessionaria_e_campos_contrato.sql` | `concessionaria_id`, `motivo_contato`, `acao_recomendada`, `perfil_comportamental` |
+| V9 | `V9__alter_cliente_add_consentimento_e_nps.sql` | Consentimento LGPD, canal preferido e NPS |
+| V10 | `V10__alter_veiculo_add_garantia_e_telemetria.sql` | Cor, quilometragem, garantia, próxima revisão, telemetria |
+| V11 | `V11__create_requisicao_idempotente_table.sql` | Suporte ao header `Idempotency-Key` |
+| V12 | `V12__alter_concessionaria_add_codigo.sql` | Código da unidade (ex.: `SP-001`) |
+
+Massa de demonstração em `src/main/resources/db/seed/V900__seed_demo_data.sql`, carregada **apenas no
+perfil `dev`** (o `prod` não inclui `db/seed` em `spring.flyway.locations`). O arquivo é gerado, não
+editado à mão: 3 concessionárias, 8 usuários, 30 clientes, 37 veículos, 148 ordens de serviço,
+19 agendamentos e 33 leads.
+
+Para regerar: `python tools/gen_seed.py`. O script usa semente fixa, então a saída é sempre idêntica.
+Se regerar **depois** de o seed já ter sido aplicado, o checksum muda e o Flyway aborta — nesse caso,
+`DROP DATABASE vinsight;` e suba de novo.
 
 > **Regra:** nunca editar uma migration já aplicada. Sempre criar uma nova `V{n+1}__nome.sql` com `ALTER TABLE` se for ajustar schema existente.
 
 ## Decisões de projeto
 
-- **MySQL no lugar de H2** — banco real local em vez de in-memory, para validar com o setup que vai pra produção.
+- **MySQL em todos os perfis, sem H2** — banco real local, o mesmo ecossistema usado na faculdade. O isolamento dos testes vem de um **schema separado** (`vinsight_test`), não de um banco in-memory: os testes exercitam as migrations e o dialeto de verdade.
+- **Seed separado das migrations** — `db/migration` é schema, `db/seed` é dado de demonstração. Só o perfil `dev` lê o segundo.
 - **Embeddables como classes Lombok** (não records) — JPA 3.x não suporta records como `@Embeddable`. Records ficam só nos DTOs.
 - **Soft delete em todas as features** — `ativo=false` em Cliente/Concessionária, mudança de `status` em Veículo/Agendamento. Histórico nunca é perdido.
 - **FKs `LAZY` + métodos de service `@Transactional`** — evita N+1 nas listagens; DTO constructors acessam FKs dentro da transação.
