@@ -9,6 +9,7 @@ import br.com.fiap.vinsight_api.concessionaria.DadosDetalheConcessionaria;
 import br.com.fiap.vinsight_api.concessionaria.DadosListagemConcessionaria;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RestController
 @RequestMapping("/api/v1/concessionarias")
 @Tag(name = "Concessionárias", description = "Cadastro e gestão de concessionárias Ford")
+@SecurityRequirement(name = "bearer-key")
 public class ConcessionariaController {
 
     @Autowired

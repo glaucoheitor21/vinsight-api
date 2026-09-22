@@ -1,7 +1,11 @@
 package br.com.fiap.vinsight_api.infra.security;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -9,25 +13,28 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * US-28 — esqueleto da cadeia de seguranca.
+ * Cadeia de seguranca stateless com JWT, no molde do projeto do professor.
  *
- * ATENCAO: nesta etapa a cadeia esta com anyRequest().permitAll() de proposito.
- * O starter de security ja esta no classpath (para o PasswordEncoder e para a
- * US-29), mas ainda nao existe endpoint de login nem filtro de JWT — se a cadeia
- * exigisse autenticacao agora, a API inteira ficaria inacessivel.
- *
- * A US-29 substitui o permitAll pelas regras reais e registra o SecurityFilter.
+ * Publico: health check, login/refresh e Swagger. Todo o resto exige access token valido.
+ * As regras por perfil ficam nos controllers com @PreAuthorize (US-30).
  */
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity // Autorizacao por perfil gerenciada nos controllers
 public class SecurityConfig {
+
+    @Autowired
+    private SecurityFilter securityFilter;
+
+    @Autowired
+    private AutenticacaoEntryPoint autenticacaoEntryPoint;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -54,9 +61,26 @@ public class SecurityConfig {
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll() // TODO US-29: trocar pelas regras reais
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .requestMatchers(
+                                "/api-docs",
+                                "/api-docs/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**"
+                        ).permitAll()
+                        // Encaminhamento interno do Spring para a pagina de erro
+                        .requestMatchers("/error").permitAll()
+                        .anyRequest().authenticated()
                 )
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(autenticacaoEntryPoint))
+                .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
     }
 
     @Bean

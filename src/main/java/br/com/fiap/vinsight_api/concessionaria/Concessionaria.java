@@ -28,6 +28,9 @@ public class Concessionaria {
 
     private String nomeFantasia;
 
+    // Codigo da unidade (ex.: SP-001), devolvido na resposta de login (V12)
+    private String codigo;
+
     private String razaoSocial;
 
     private String cnpj;

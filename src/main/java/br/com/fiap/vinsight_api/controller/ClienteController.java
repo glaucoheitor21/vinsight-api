@@ -9,6 +9,7 @@ import br.com.fiap.vinsight_api.veiculo.DadosListagemVeiculo;
 import br.com.fiap.vinsight_api.veiculo.VeiculoService;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/clientes")
 @Tag(name = "Clientes", description = "Cadastro e gestão de clientes Ford")
+@SecurityRequirement(name = "bearer-key")
 public class ClienteController {
 
     @Autowired

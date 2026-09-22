@@ -8,6 +8,7 @@ import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
 import br.com.fiap.vinsight_api.agendamento.StatusAgendamento;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("/api/v1/agendamentos")
 @Tag(name = "Agendamentos", description = "Agendamentos de serviços Ford (revisão, reparo, garantia, recall)")
+@SecurityRequirement(name = "bearer-key")
 public class AgendamentoController {
 
     @Autowired
