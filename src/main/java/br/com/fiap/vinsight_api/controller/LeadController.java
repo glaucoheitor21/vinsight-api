@@ -7,11 +7,11 @@ import br.com.fiap.vinsight_api.lead.DadosListagemLead;
 import br.com.fiap.vinsight_api.lead.LeadService;
 import br.com.fiap.vinsight_api.lead.PrioridadeLead;
 import br.com.fiap.vinsight_api.lead.StatusLead;
+import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -46,12 +46,12 @@ public class LeadController {
 
     @GetMapping
     @Operation(summary = "Lista leads com filtros opcionais (prioridade, status, clienteId)")
-    public ResponseEntity<Page<DadosListagemLead>> listar(
+    public ResponseEntity<DadosPagina<DadosListagemLead>> listar(
             @RequestParam(required = false) PrioridadeLead prioridade,
             @RequestParam(required = false) StatusLead status,
             @RequestParam(required = false) Long clienteId,
             @PageableDefault(size = 20, sort = "score") Pageable paginacao) {
-        return ResponseEntity.ok(service.listar(prioridade, status, clienteId, paginacao));
+        return ResponseEntity.ok(new DadosPagina<>(service.listar(prioridade, status, clienteId, paginacao)));
     }
 
     @GetMapping("/{id}")

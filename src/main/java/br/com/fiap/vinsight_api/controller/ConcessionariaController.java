@@ -7,11 +7,11 @@ import br.com.fiap.vinsight_api.concessionaria.DadosAtualizacaoConcessionaria;
 import br.com.fiap.vinsight_api.concessionaria.DadosCadastroConcessionaria;
 import br.com.fiap.vinsight_api.concessionaria.DadosDetalheConcessionaria;
 import br.com.fiap.vinsight_api.concessionaria.DadosListagemConcessionaria;
+import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -49,9 +49,9 @@ public class ConcessionariaController {
 
     @GetMapping
     @Operation(summary = "Lista concessionárias ativas paginadas")
-    public ResponseEntity<Page<DadosListagemConcessionaria>> listar(
+    public ResponseEntity<DadosPagina<DadosListagemConcessionaria>> listar(
             @PageableDefault(size = 20, sort = "id") Pageable paginacao) {
-        return ResponseEntity.ok(service.listar(paginacao));
+        return ResponseEntity.ok(new DadosPagina<>(service.listar(paginacao)));
     }
 
     @GetMapping("/{id}")
@@ -77,9 +77,9 @@ public class ConcessionariaController {
 
     @GetMapping("/{id}/agendamentos")
     @Operation(summary = "Lista agendamentos de uma concessionária (paginado)")
-    public ResponseEntity<Page<DadosListagemAgendamento>> listarAgendamentos(
+    public ResponseEntity<DadosPagina<DadosListagemAgendamento>> listarAgendamentos(
             @PathVariable Long id,
             @PageableDefault(size = 20, sort = "dataHora") Pageable paginacao) {
-        return ResponseEntity.ok(agendamentoService.listarPorConcessionaria(id, paginacao));
+        return ResponseEntity.ok(new DadosPagina<>(agendamentoService.listarPorConcessionaria(id, paginacao)));
     }
 }

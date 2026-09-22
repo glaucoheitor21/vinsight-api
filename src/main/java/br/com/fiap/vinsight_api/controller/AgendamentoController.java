@@ -6,11 +6,11 @@ import br.com.fiap.vinsight_api.agendamento.DadosCadastroAgendamento;
 import br.com.fiap.vinsight_api.agendamento.DadosDetalheAgendamento;
 import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
 import br.com.fiap.vinsight_api.agendamento.StatusAgendamento;
+import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -49,13 +49,13 @@ public class AgendamentoController {
 
     @GetMapping
     @Operation(summary = "Lista agendamentos com filtros opcionais")
-    public ResponseEntity<Page<DadosListagemAgendamento>> listar(
+    public ResponseEntity<DadosPagina<DadosListagemAgendamento>> listar(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataFim,
             @RequestParam(required = false) Long concessionariaId,
             @RequestParam(required = false) StatusAgendamento status,
             @PageableDefault(size = 20, sort = "dataHora") Pageable paginacao) {
-        return ResponseEntity.ok(service.listar(dataInicio, dataFim, concessionariaId, status, paginacao));
+        return ResponseEntity.ok(new DadosPagina<>(service.listar(dataInicio, dataFim, concessionariaId, status, paginacao)));
     }
 
     @GetMapping("/{id}")

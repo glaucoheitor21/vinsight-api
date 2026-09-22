@@ -7,11 +7,11 @@ import br.com.fiap.vinsight_api.cliente.DadosDetalheCliente;
 import br.com.fiap.vinsight_api.cliente.DadosListagemCliente;
 import br.com.fiap.vinsight_api.veiculo.DadosListagemVeiculo;
 import br.com.fiap.vinsight_api.veiculo.VeiculoService;
+import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
@@ -51,9 +51,9 @@ public class ClienteController {
 
     @GetMapping
     @Operation(summary = "Lista clientes ativos paginados")
-    public ResponseEntity<Page<DadosListagemCliente>> listar(
+    public ResponseEntity<DadosPagina<DadosListagemCliente>> listar(
             @PageableDefault(size = 20, sort = "id") Pageable paginacao) {
-        return ResponseEntity.ok(service.listar(paginacao));
+        return ResponseEntity.ok(new DadosPagina<>(service.listar(paginacao)));
     }
 
     @GetMapping("/{id}")
