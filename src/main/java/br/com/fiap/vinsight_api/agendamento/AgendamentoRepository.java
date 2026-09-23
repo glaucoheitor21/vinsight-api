@@ -24,7 +24,16 @@ public interface AgendamentoRepository extends JpaRepository<Agendamento, Long> 
             @Param("status") StatusAgendamento status,
             Pageable paginacao);
 
-    Page<Agendamento> findAllByVeiculoId(Long veiculoId, Pageable paginacao);
+    // concessionariaId null = sem restricao de unidade (analista/admin)
+    @Query("""
+            SELECT a FROM Agendamento a
+            WHERE a.veiculo.id = :veiculoId
+              AND (:concessionariaId IS NULL OR a.concessionaria.id = :concessionariaId)
+            """)
+    Page<Agendamento> buscarPorVeiculo(
+            @Param("veiculoId") Long veiculoId,
+            @Param("concessionariaId") Long concessionariaId,
+            Pageable paginacao);
 
     Page<Agendamento> findAllByConcessionariaId(Long concessionariaId, Pageable paginacao);
 }

@@ -13,10 +13,12 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
             WHERE (:prioridade IS NULL OR l.prioridade = :prioridade)
               AND (:status IS NULL OR l.status = :status)
               AND (:clienteId IS NULL OR l.cliente.id = :clienteId)
+              AND (:concessionariaId IS NULL OR l.concessionaria.id = :concessionariaId)
             """)
     Page<Lead> buscarComFiltros(
             @Param("prioridade") PrioridadeLead prioridade,
             @Param("status") StatusLead status,
             @Param("clienteId") Long clienteId,
+            @Param("concessionariaId") Long concessionariaId,
             Pageable paginacao);
 }

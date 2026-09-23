@@ -4,6 +4,7 @@ import br.com.fiap.vinsight_api.cliente.Cliente;
 import br.com.fiap.vinsight_api.cliente.ClienteRepository;
 import br.com.fiap.vinsight_api.infra.exception.EntidadeNaoEncontradaException;
 import br.com.fiap.vinsight_api.infra.exception.RegraNegocioException;
+import br.com.fiap.vinsight_api.infra.security.ContextoSeguranca;
 import br.com.fiap.vinsight_api.veiculo.Veiculo;
 import br.com.fiap.vinsight_api.veiculo.VeiculoRepository;
 import jakarta.transaction.Transactional;
@@ -23,6 +24,9 @@ public class LeadService {
 
     @Autowired
     private VeiculoRepository veiculoRepository;
+
+    @Autowired
+    private ContextoSeguranca contexto;
 
     @Transactional
     public DadosDetalheLead cadastrar(DadosCadastroLead dados) {
@@ -47,7 +51,9 @@ public class LeadService {
     @Transactional
     public Page<DadosListagemLead> listar(PrioridadeLead prioridade, StatusLead status,
                                            Long clienteId, Pageable paginacao) {
-        return repository.buscarComFiltros(prioridade, status, clienteId, paginacao)
+        // Consultor/gerente veem so a propria unidade; analista/admin, a rede inteira (null)
+        return repository.buscarComFiltros(prioridade, status, clienteId,
+                        contexto.concessionariaEscopo(), paginacao)
                 .map(DadosListagemLead::new);
     }
 
@@ -76,9 +82,12 @@ public class LeadService {
         return new DadosDetalheLead(lead);
     }
 
+    // Todo acesso individual passa por aqui: 404 se nao existe, 403 se e de outra unidade
     private Lead buscar(Long id) {
-        return repository.findById(id)
+        Lead lead = repository.findById(id)
                 .orElseThrow(() -> new EntidadeNaoEncontradaException(
                         "Lead com id " + id + " não encontrado."));
+        contexto.verificarAcesso(lead.getConcessionaria());
+        return lead;
     }
 }

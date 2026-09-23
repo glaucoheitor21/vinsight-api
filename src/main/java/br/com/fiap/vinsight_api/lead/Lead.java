@@ -1,6 +1,7 @@
 package br.com.fiap.vinsight_api.lead;
 
 import br.com.fiap.vinsight_api.cliente.Cliente;
+import br.com.fiap.vinsight_api.concessionaria.Concessionaria;
 import br.com.fiap.vinsight_api.veiculo.Veiculo;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -41,6 +42,11 @@ public class Lead {
     @JoinColumn(name = "veiculo_id", nullable = false)
     private Veiculo veiculo;
 
+    // Unidade dona do lead: base do escopo de dados da US-30 (coluna criada na V8)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "concessionaria_id")
+    private Concessionaria concessionaria;
+
     private Double score;
 
     @Enumerated(EnumType.STRING)
@@ -65,6 +71,8 @@ public class Lead {
     public Lead(DadosCadastroLead dados, Cliente cliente, Veiculo veiculo) {
         this.cliente = cliente;
         this.veiculo = veiculo;
+        // O lead pertence a unidade que vendeu o veiculo (mesma regra da massa de demonstracao)
+        this.concessionaria = veiculo.getConcessionariaCompra();
         this.score = dados.score();
         this.prioridade = dados.prioridade();
         this.motivo = dados.motivo();

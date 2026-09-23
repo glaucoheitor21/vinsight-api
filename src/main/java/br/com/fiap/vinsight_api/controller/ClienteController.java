@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +42,7 @@ public class ClienteController {
     private VeiculoService veiculoService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cadastra um novo cliente")
     public ResponseEntity<DadosDetalheCliente> cadastrar(
             @RequestBody @Valid DadosCadastroCliente dados,
@@ -52,6 +54,7 @@ public class ClienteController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista clientes ativos paginados")
     public ResponseEntity<DadosPagina<DadosListagemCliente>> listar(
             @PageableDefault(size = 20, sort = "id") Pageable paginacao) {
@@ -59,12 +62,14 @@ public class ClienteController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Detalha um cliente por ID")
     public ResponseEntity<DadosDetalheCliente> detalhar(@PathVariable Long id) {
         return ResponseEntity.ok(service.detalhar(id));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Atualiza um cliente")
     public ResponseEntity<DadosDetalheCliente> atualizar(
             @PathVariable Long id,
@@ -73,6 +78,7 @@ public class ClienteController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('GERENTE', 'ADMIN')")
     @Operation(summary = "Inativa um cliente (soft delete)")
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
@@ -80,6 +86,7 @@ public class ClienteController {
     }
 
     @GetMapping("/{id}/veiculos")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista os veículos de um cliente")
     public ResponseEntity<List<DadosListagemVeiculo>> listarVeiculos(@PathVariable Long id) {
         return ResponseEntity.ok(veiculoService.listarPorCliente(id));

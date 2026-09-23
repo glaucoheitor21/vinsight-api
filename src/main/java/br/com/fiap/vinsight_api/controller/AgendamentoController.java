@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,6 +40,7 @@ public class AgendamentoController {
     private AgendamentoService service;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cria um novo agendamento")
     public ResponseEntity<DadosDetalheAgendamento> cadastrar(
             @RequestBody @Valid DadosCadastroAgendamento dados,
@@ -50,6 +52,7 @@ public class AgendamentoController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista agendamentos com filtros opcionais")
     public ResponseEntity<DadosPagina<DadosListagemAgendamento>> listar(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
@@ -61,12 +64,14 @@ public class AgendamentoController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Detalha um agendamento por ID")
     public ResponseEntity<DadosDetalheAgendamento> detalhar(@PathVariable Long id) {
         return ResponseEntity.ok(service.detalhar(id));
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Atualiza o status de um agendamento (atualização parcial)")
     public ResponseEntity<DadosDetalheAgendamento> atualizarStatus(
             @PathVariable Long id,
@@ -75,6 +80,7 @@ public class AgendamentoController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cancela um agendamento (status=CANCELADO)")
     public ResponseEntity<Void> cancelar(@PathVariable Long id) {
         service.cancelar(id);

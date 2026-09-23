@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,6 +40,7 @@ public class ConcessionariaController {
     private AgendamentoService agendamentoService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cadastra uma nova concessionária")
     public ResponseEntity<DadosDetalheConcessionaria> cadastrar(
             @RequestBody @Valid DadosCadastroConcessionaria dados,
@@ -50,6 +52,7 @@ public class ConcessionariaController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ANALISTA_FORD', 'ADMIN')")
     @Operation(summary = "Lista concessionárias ativas paginadas")
     public ResponseEntity<DadosPagina<DadosListagemConcessionaria>> listar(
             @PageableDefault(size = 20, sort = "id") Pageable paginacao) {
@@ -57,12 +60,14 @@ public class ConcessionariaController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ANALISTA_FORD', 'ADMIN')")
     @Operation(summary = "Detalha uma concessionária por ID")
     public ResponseEntity<DadosDetalheConcessionaria> detalhar(@PathVariable Long id) {
         return ResponseEntity.ok(service.detalhar(id));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Atualiza uma concessionária")
     public ResponseEntity<DadosDetalheConcessionaria> atualizar(
             @PathVariable Long id,
@@ -71,6 +76,7 @@ public class ConcessionariaController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Inativa uma concessionária (soft delete)")
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
@@ -78,6 +84,7 @@ public class ConcessionariaController {
     }
 
     @GetMapping("/{id}/agendamentos")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista agendamentos de uma concessionária (paginado)")
     public ResponseEntity<DadosPagina<DadosListagemAgendamento>> listarAgendamentos(
             @PathVariable Long id,

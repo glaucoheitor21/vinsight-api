@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,6 +40,7 @@ public class VeiculoController {
     private AgendamentoService agendamentoService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cadastra um novo veículo")
     public ResponseEntity<DadosDetalheVeiculo> cadastrar(
             @RequestBody @Valid DadosCadastroVeiculo dados,
@@ -50,6 +52,7 @@ public class VeiculoController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista veículos paginados (exclui INATIVOs)")
     public ResponseEntity<DadosPagina<DadosListagemVeiculo>> listar(
             @PageableDefault(size = 20, sort = "id") Pageable paginacao) {
@@ -57,18 +60,21 @@ public class VeiculoController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Detalha um veículo por ID")
     public ResponseEntity<DadosDetalheVeiculo> detalhar(@PathVariable Long id) {
         return ResponseEntity.ok(service.detalhar(id));
     }
 
     @GetMapping("/vin/{vin}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Detalha um veículo pelo VIN")
     public ResponseEntity<DadosDetalheVeiculo> detalharPorVin(@PathVariable String vin) {
         return ResponseEntity.ok(service.detalharPorVin(vin));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Atualiza um veículo")
     public ResponseEntity<DadosDetalheVeiculo> atualizar(
             @PathVariable Long id,
@@ -77,6 +83,7 @@ public class VeiculoController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('GERENTE', 'ADMIN')")
     @Operation(summary = "Inativa um veículo (status=INATIVO)")
     public ResponseEntity<Void> inativar(@PathVariable Long id) {
         service.inativar(id);
@@ -84,6 +91,7 @@ public class VeiculoController {
     }
 
     @GetMapping("/{id}/agendamentos")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista agendamentos de um veículo (paginado)")
     public ResponseEntity<DadosPagina<DadosListagemAgendamento>> listarAgendamentos(
             @PathVariable Long id,

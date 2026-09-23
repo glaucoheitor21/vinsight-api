@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -36,6 +37,7 @@ public class LeadController {
     private LeadService service;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Registra um novo lead (gerado pelo modelo de ML)")
     public ResponseEntity<DadosDetalheLead> cadastrar(
             @RequestBody @Valid DadosCadastroLead dados,
@@ -47,6 +49,7 @@ public class LeadController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Lista leads com filtros opcionais (prioridade, status, clienteId)")
     public ResponseEntity<DadosPagina<DadosListagemLead>> listar(
             @RequestParam(required = false) PrioridadeLead prioridade,
@@ -57,12 +60,14 @@ public class LeadController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Detalha um lead por ID")
     public ResponseEntity<DadosDetalheLead> detalhar(@PathVariable Long id) {
         return ResponseEntity.ok(service.detalhar(id));
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Atualiza o status do lead (NOVO → EM_CONTATO → CONVERTIDO/PERDIDO)")
     public ResponseEntity<DadosDetalheLead> atualizarStatus(
             @PathVariable Long id,
@@ -71,6 +76,7 @@ public class LeadController {
     }
 
     @PatchMapping("/{id}/conversao")
+    @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Marca o lead como CONVERTIDO e registra a data de conversão")
     public ResponseEntity<DadosDetalheLead> marcarConvertido(@PathVariable Long id) {
         return ResponseEntity.ok(service.marcarConvertido(id));
