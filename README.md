@@ -150,16 +150,21 @@ Cada feature package contém: `Entity`, `Repository`, DTOs (records), `Service`,
 
 Base path: **`/api/v1`**.
 
-### Clientes
+### Clientes (Customer Service — US-33)
+
+Filtrados pela **carteira da unidade** do usuário: um cliente aparece para toda concessionária com
+que tem vínculo (cadastro, compra, serviço ou agendamento). CPF, telefone e e-mail saem
+**mascarados para o CONSULTOR**; GERENTE e ADMIN veem os dados completos.
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| POST | `/clientes` | Cadastra novo cliente |
-| GET | `/clientes` | Lista clientes ativos (paginado) |
-| GET | `/clientes/{id}` | Detalha cliente |
-| PUT | `/clientes/{id}` | Atualiza cliente |
-| DELETE | `/clientes/{id}` | Inativa cliente (soft delete) |
-| GET | `/clientes/{id}/veiculos` | Lista veículos do cliente |
+| POST | `/customers` | Cadastra novo cliente (entra na carteira de quem cadastrou) |
+| GET | `/customers?q=` | Busca por nome parcial, CPF ou telefone (paginado); sem `q`, lista a carteira |
+| GET | `/customers/{id}` | Detalha o cadastro |
+| GET | `/customers/{id}/overview` | Visão 360°: cadastro, veículos, consentimento, NPS e resumo do histórico |
+| GET | `/customers/{id}/vehicles` | Lista veículos do cliente |
+| PUT | `/customers/{id}` | Atualiza cliente |
+| DELETE | `/customers/{id}` | Inativa cliente (soft delete) — GERENTE e ADMIN |
 
 ### Veículos
 
@@ -283,11 +288,16 @@ Flyway controla o schema versionado. Migrations em `src/main/resources/db/migrat
 | V10 | `V10__alter_veiculo_add_garantia_e_telemetria.sql` | Cor, quilometragem, garantia, próxima revisão, telemetria |
 | V11 | `V11__create_requisicao_idempotente_table.sql` | Suporte ao header `Idempotency-Key` |
 | V12 | `V12__alter_concessionaria_add_codigo.sql` | Código da unidade (ex.: `SP-001`) |
+| V13 | `V13__alter_cliente_add_concessionaria_cadastro.sql` | Unidade que cadastrou o cliente (carteira da US-33) |
 
 Massa de demonstração em `src/main/resources/db/seed/V900__seed_demo_data.sql`, carregada **apenas no
 perfil `dev`** (o `prod` não inclui `db/seed` em `spring.flyway.locations`). O arquivo é gerado, não
 editado à mão: 3 concessionárias, 8 usuários, 30 clientes, 37 veículos, 148 ordens de serviço,
 19 agendamentos e 33 leads.
+
+Correções e complementos da massa ficam em `db/seed/V9xx`, numerados depois da V900, para rodar
+depois dela tanto num banco novo quanto num existente: `V901` (vocabulário de `tipoServico`) e `V902`
+(cliente atendido em duas unidades, que demonstra a carteira por relacionamento).
 
 Para regerar: `python tools/gen_seed.py`. O script usa semente fixa, então a saída é sempre idêntica.
 Se regerar **depois** de o seed já ter sido aplicado, o checksum muda e o Flyway aborta — nesse caso,

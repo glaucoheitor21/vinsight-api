@@ -68,6 +68,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return responder(HttpStatus.NOT_FOUND, TipoProblema.NAO_ENCONTRADO, e.getMessage(), request);
     }
 
+    @ExceptionHandler(CampoInvalidoException.class)
+    public ResponseEntity<Object> handle422Campo(CampoInvalidoException e, HttpServletRequest request) {
+        return validacao(List.of(new Violacao(e.getCampo(), e.getMessage())), request);
+    }
+
     @ExceptionHandler(RegraNegocioException.class)
     public ResponseEntity<ProblemDetail> handle409(RegraNegocioException e, HttpServletRequest request) {
         return responder(HttpStatus.CONFLICT, TipoProblema.CONFLITO, e.getMessage(), request);
@@ -232,11 +237,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private ResponseEntity<Object> validacao(List<Violacao> violacoes, WebRequest request) {
+        return validacao(violacoes, ((ServletWebRequest) request).getRequest());
+    }
+
+    private ResponseEntity<Object> validacao(List<Violacao> violacoes, HttpServletRequest request) {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT,
                 "Um ou mais campos estão inválidos.");
         problema.setProperty("violacoes", violacoes);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                .body(completar(problema, TipoProblema.VALIDACAO, ((ServletWebRequest) request).getRequest()));
+                .body(completar(problema, TipoProblema.VALIDACAO, request));
     }
 
     private ProblemDetail completar(ProblemDetail problema, TipoProblema tipo, HttpServletRequest request) {

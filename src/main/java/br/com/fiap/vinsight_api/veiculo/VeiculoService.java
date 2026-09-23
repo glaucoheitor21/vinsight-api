@@ -12,8 +12,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
 public class VeiculoService {
 
@@ -68,17 +66,6 @@ public class VeiculoService {
                 .orElseThrow(() -> new EntidadeNaoEncontradaException(
                         "Veículo com VIN " + vin + " não encontrado."));
         return new DadosDetalheVeiculo(veiculo);
-    }
-
-    @Transactional
-    public List<DadosListagemVeiculo> listarPorCliente(Long clienteId) {
-        if (!clienteRepository.existsById(clienteId)) {
-            throw new EntidadeNaoEncontradaException(
-                    "Cliente com id " + clienteId + " não encontrado.");
-        }
-        return repository.findAllByClienteId(clienteId).stream()
-                .map(DadosListagemVeiculo::new)
-                .toList();
     }
 
     @Transactional
