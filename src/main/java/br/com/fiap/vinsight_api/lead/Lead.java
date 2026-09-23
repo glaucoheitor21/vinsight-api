@@ -2,6 +2,7 @@ package br.com.fiap.vinsight_api.lead;
 
 import br.com.fiap.vinsight_api.cliente.Cliente;
 import br.com.fiap.vinsight_api.concessionaria.Concessionaria;
+import br.com.fiap.vinsight_api.infra.exception.RegraNegocioException;
 import br.com.fiap.vinsight_api.veiculo.Veiculo;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,25 +48,48 @@ public class Lead {
     @JoinColumn(name = "concessionaria_id")
     private Concessionaria concessionaria;
 
+    // Probabilidade de evasao (0.0 a 1.0) produzida pelo modelo de churn
     private Double score;
 
+    // Classificacao da v1, ainda exigida pela coluna (NOT NULL). O contrato usa faixaRisco().
     @Enumerated(EnumType.STRING)
     private PrioridadeLead prioridade;
 
     @Enumerated(EnumType.STRING)
     private StatusLead status;
 
+    // Texto livre da v1 (coluna NOT NULL); o contrato expoe motivoContato
     @Column(length = 500)
     private String motivo;
 
+    // --- Campos do contrato (V8)
+
+    @Column(length = 500)
+    private String motivoContato;
+
+    private String acaoRecomendada;
+
+    @Enumerated(EnumType.STRING)
+    private PerfilComportamental perfilComportamental;
+
+    private LocalDateTime ultimoContatoEm;
+
+    // --- Supressao registrada (V14): lead fora da fila, e por que
+
+    @Enumerated(EnumType.STRING)
+    private MotivoSupressao suprimidoMotivo;
+
+    private LocalDateTime suprimidoEm;
+
     private LocalDateTime dataGeracao;
 
+    // Quando o lead virou agendamento (desfecho AGENDADO)
     private LocalDateTime dataConversao;
 
     @PrePersist
     void prePersist() {
-        this.dataGeracao = LocalDateTime.now();
-        if (this.status == null) this.status = StatusLead.NOVO;
+        if (this.dataGeracao == null) this.dataGeracao = LocalDateTime.now();
+        if (this.status == null) this.status = StatusLead.OPEN;
     }
 
     public Lead(DadosCadastroLead dados, Cliente cliente, Veiculo veiculo) {
@@ -76,17 +100,41 @@ public class Lead {
         this.score = dados.score();
         this.prioridade = dados.prioridade();
         this.motivo = dados.motivo();
+        this.motivoContato = dados.motivo();
+        this.acaoRecomendada = dados.acaoRecomendada();
+        this.perfilComportamental = dados.perfilComportamental();
     }
 
-    public void atualizarStatus(StatusLead novoStatus) {
-        this.status = novoStatus;
-        if (novoStatus == StatusLead.CONVERTIDO && this.dataConversao == null) {
-            this.dataConversao = LocalDateTime.now();
+    public FaixaRisco faixaRisco() {
+        return FaixaRisco.de(score);
+    }
+
+    public boolean suprimido() {
+        return suprimidoMotivo != null;
+    }
+
+    public void suprimir(MotivoSupressao motivo, LocalDateTime agora) {
+        this.suprimidoMotivo = motivo;
+        this.suprimidoEm = agora;
+    }
+
+    /**
+     * Aplica o desfecho de um contato. Lead encerrado ou suprimido nao aceita desfecho (409):
+     * o encerrado ja foi resolvido, e o suprimido nao pode ser contatado (LGPD).
+     */
+    public void registrarDesfecho(Desfecho desfecho, LocalDateTime agora) {
+        if (suprimido()) {
+            throw new RegraNegocioException(
+                    "Lead suprimido (" + suprimidoMotivo + "): o cliente não pode ser contatado.");
         }
-    }
-
-    public void marcarConvertido() {
-        this.status = StatusLead.CONVERTIDO;
-        this.dataConversao = LocalDateTime.now();
+        if (status.encerrado()) {
+            throw new RegraNegocioException(
+                    "Lead já encerrado com desfecho " + status + "; não aceita novo desfecho.");
+        }
+        this.status = desfecho.status();
+        this.ultimoContatoEm = agora;
+        if (desfecho == Desfecho.AGENDADO) {
+            this.dataConversao = agora;
+        }
     }
 }

@@ -205,15 +205,23 @@ dias ou menos, `ENCERRADA`), `proximaRevisaoPrevista.situacao` (`EM_DIA`, `PROXI
 | DELETE | `/concessionarias/{id}` | Inativa (soft delete) |
 | GET | `/concessionarias/{id}/agendamentos` | Lista agendamentos da concessionária |
 
-### Leads
+### Leads (Lead Engine — US-35)
+
+A **fila de trabalho do consultor**: só a unidade dele, do maior score para o menor, **sem leads
+suprimidos**. Cliente sem consentimento (LGPD) nunca aparece; o lead fica registrado como suprimido
+com o motivo `LGPD_OPT_OUT`.
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| POST | `/leads` | Registra lead gerado pelo modelo de ML |
-| GET | `/leads` | Lista (filtros: `prioridade`, `status`, `clienteId`) — ordenação default por `score` desc |
-| GET | `/leads/{id}` | Detalha lead |
-| **PATCH** | `/leads/{id}/status` | Atualiza status (NOVO → EM_CONTATO → CONVERTIDO/PERDIDO) |
-| **PATCH** | `/leads/{id}/conversao` | Marca como CONVERTIDO e registra `dataConversao` |
+| GET | `/leads?status=OPEN&risco=ALTO` | Fila paginada. `risco`: `ALTO` (≥ 0,70), `MEDIO` (0,40 a 0,69), `BAIXO` (< 0,40), derivado do score |
+| GET | `/leads/{id}` | Detalhe com supressão (se houver) e histórico de desfechos |
+| **PATCH** | `/leads/{id}` | Registra o desfecho de um contato. Header opcional `Idempotency-Key` |
+| POST | `/leads` | Entrada de lead do modelo de churn (ADMIN); cliente sem consentimento entra já suprimido |
+
+Desfechos: `CONTATADO` e `SEM_SUCESSO` mantêm o lead aberto; `AGENDADO`, `RECUSADO` e
+`NUMERO_INVALIDO` o encerram (novo desfecho → 409). Cada desfecho é gravado em `desfechos_lead`, com
+autor e data, como base para o retreinamento do modelo. Reenviar a mesma `Idempotency-Key` devolve a
+resposta original (header `Idempotent-Replayed: true`) sem gravar de novo.
 
 Detalhes completos de cada endpoint (request/response, validações, exemplos) estão no **Swagger UI**.
 
@@ -224,7 +232,7 @@ Detalhes completos de cada endpoint (request/response, validações, exemplos) e
 | GET | Leituras (detalhar/listar) | Sim |
 | POST | Criação de recurso (não-idempotente) | Não |
 | PUT | Substituição completa do recurso | Sim |
-| PATCH | Atualização **parcial** — usado em `agendamentos/{id}/status`, `leads/{id}/status`, `leads/{id}/conversao` | Sim |
+| PATCH | Atualização **parcial** — usado em `agendamentos/{id}/status` e no desfecho `leads/{id}` | Sim (o de lead, com `Idempotency-Key`) |
 | DELETE | Remoção lógica (soft delete via flag `ativo` ou mudança de status) | Sim |
 
 ## Tratamento de erros
@@ -295,6 +303,7 @@ Flyway controla o schema versionado. Migrations em `src/main/resources/db/migrat
 | V11 | `V11__create_requisicao_idempotente_table.sql` | Suporte ao header `Idempotency-Key` |
 | V12 | `V12__alter_concessionaria_add_codigo.sql` | Código da unidade (ex.: `SP-001`) |
 | V13 | `V13__alter_cliente_add_concessionaria_cadastro.sql` | Unidade que cadastrou o cliente (carteira da US-33) |
+| V14 | `V14__lead_desfecho_e_supressao.sql` | Supressão do lead (LGPD) e tabela `desfechos_lead` |
 
 Massa de demonstração em `src/main/resources/db/seed/V900__seed_demo_data.sql`, carregada **apenas no
 perfil `dev`** (o `prod` não inclui `db/seed` em `spring.flyway.locations`). O arquivo é gerado, não
@@ -303,7 +312,8 @@ editado à mão: 3 concessionárias, 8 usuários, 30 clientes, 37 veículos, 148
 
 Correções e complementos da massa ficam em `db/seed/V9xx`, numerados depois da V900, para rodar
 depois dela tanto num banco novo quanto num existente: `V901` (vocabulário de `tipoServico`) e `V902`
-(cliente atendido em duas unidades, que demonstra a carteira por relacionamento).
+(cliente atendido em duas unidades, que demonstra a carteira por relacionamento) e `V903` (status de
+lead no vocabulário do contrato e supressão LGPD dos 5 leads de clientes sem consentimento).
 
 Para regerar: `python tools/gen_seed.py`. O script usa semente fixa, então a saída é sempre idêntica.
 Se regerar **depois** de o seed já ter sido aplicado, o checksum muda e o Flyway aborta — nesse caso,
