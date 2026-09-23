@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.veiculo;
 
+import br.com.fiap.vinsight_api.infra.security.MascaradorDados;
+
 import java.time.LocalDate;
 
 public record DadosDetalheVeiculo(
@@ -15,7 +17,8 @@ public record DadosDetalheVeiculo(
         ClienteResumo cliente,
         ConcessionariaResumo concessionariaCompra
 ) {
-    public DadosDetalheVeiculo(Veiculo v) {
+    // O CPF do dono passa pelo MascaradorDados: na v1 ele saia completo para qualquer perfil
+    public DadosDetalheVeiculo(Veiculo v, MascaradorDados mascarador) {
         this(v.getId(),
                 v.getVin(),
                 v.getPlaca(),
@@ -27,7 +30,7 @@ public record DadosDetalheVeiculo(
                 v.getStatus(),
                 new ClienteResumo(v.getCliente().getId(),
                         v.getCliente().getDadosPessoais().getNome(),
-                        v.getCliente().getDadosPessoais().getCpf()),
+                        mascarador.cpf(v.getCliente().getDadosPessoais().getCpf())),
                 v.getConcessionariaCompra() == null ? null :
                         new ConcessionariaResumo(v.getConcessionariaCompra().getId(),
                                 v.getConcessionariaCompra().getNomeFantasia()));

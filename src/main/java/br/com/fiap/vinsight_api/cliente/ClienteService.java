@@ -3,7 +3,6 @@ package br.com.fiap.vinsight_api.cliente;
 import br.com.fiap.vinsight_api.infra.exception.CampoInvalidoException;
 import br.com.fiap.vinsight_api.infra.exception.EntidadeNaoEncontradaException;
 import br.com.fiap.vinsight_api.infra.exception.RegraNegocioException;
-import br.com.fiap.vinsight_api.infra.security.AcessoForaDoEscopoException;
 import br.com.fiap.vinsight_api.infra.security.ContextoSeguranca;
 import br.com.fiap.vinsight_api.infra.security.MascaradorDados;
 import br.com.fiap.vinsight_api.ordemservico.OrdemServicoRepository;
@@ -35,6 +34,9 @@ public class ClienteService {
 
     @Autowired
     private MascaradorDados mascarador;
+
+    @Autowired
+    private CarteiraClientes carteira;
 
     @Transactional
     public DadosDetalheCliente cadastrar(DadosCadastroCliente dados) {
@@ -110,10 +112,7 @@ public class ClienteService {
         Cliente cliente = repository.findById(id)
                 .orElseThrow(() -> new EntidadeNaoEncontradaException(
                         "Cliente com id " + id + " não encontrado."));
-        Long escopo = contexto.concessionariaEscopo();
-        if (escopo != null && !repository.pertenceACarteira(id, escopo)) {
-            throw new AcessoForaDoEscopoException();
-        }
+        carteira.verificarAcesso(id);
         return cliente;
     }
 

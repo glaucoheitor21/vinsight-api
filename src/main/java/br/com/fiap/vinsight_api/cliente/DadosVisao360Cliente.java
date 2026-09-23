@@ -2,14 +2,13 @@ package br.com.fiap.vinsight_api.cliente;
 
 import br.com.fiap.vinsight_api.infra.security.MascaradorDados;
 import br.com.fiap.vinsight_api.ordemservico.ResumoOrdens;
+import br.com.fiap.vinsight_api.shared.FusoHorario;
 import br.com.fiap.vinsight_api.veiculo.Veiculo;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -30,9 +29,6 @@ public record DadosVisao360Cliente(
         List<VeiculoResumo> veiculos,
         ResumoHistorico resumoHistorico
 ) {
-    // Os DATETIME do banco estao no horario de Brasilia; o contrato pede instante em UTC ("...Z")
-    private static final ZoneId FUSO_DO_BANCO = ZoneId.of("America/Sao_Paulo");
-
     public record Consentimento(boolean ativo, List<CanalContato> canais, Instant atualizadoEm) {
     }
 
@@ -62,13 +58,9 @@ public record DadosVisao360Cliente(
                 new Consentimento(
                         c.isConsentimentoAtivo(),
                         c.getConsentimentoCanais(),
-                        emUtc(c.getConsentimentoAtualizadoEm())),
+                        FusoHorario.emUtc(c.getConsentimentoAtualizadoEm())),
                 c.getUltimoNps(),
                 veiculos.stream().map(VeiculoResumo::new).toList(),
                 new ResumoHistorico(resumo));
-    }
-
-    private static Instant emUtc(LocalDateTime dataHora) {
-        return dataHora == null ? null : dataHora.atZone(FUSO_DO_BANCO).toInstant();
     }
 }

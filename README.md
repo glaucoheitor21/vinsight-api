@@ -166,17 +166,23 @@ que tem vínculo (cadastro, compra, serviço ou agendamento). CPF, telefone e e-
 | PUT | `/customers/{id}` | Atualiza cliente |
 | DELETE | `/customers/{id}` | Inativa cliente (soft delete) — GERENTE e ADMIN |
 
-### Veículos
+### Veículos (Vehicle Service — US-34)
+
+Identificados pelo **VIN** (17 caracteres, sem I, O e Q). VIN mal formado responde **422 sem
+consultar o banco**. Um veículo é visível quando o **dono** está na carteira da unidade do usuário.
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| POST | `/veiculos` | Cadastra novo veículo |
-| GET | `/veiculos` | Lista veículos não-inativos (paginado) |
-| GET | `/veiculos/{id}` | Detalha veículo por ID |
-| GET | `/veiculos/vin/{vin}` | Detalha veículo por VIN |
-| PUT | `/veiculos/{id}` | Atualiza veículo |
-| DELETE | `/veiculos/{id}` | Inativa veículo (status = INATIVO) |
-| GET | `/veiculos/{id}/agendamentos` | Histórico de agendamentos do veículo |
+| POST | `/vehicles` | Cadastra veículo para um cliente da carteira (`Location: /vehicles/{vin}`) |
+| GET | `/vehicles?placa=` | Busca por placa, com ou sem hífen (paginado); sem placa, lista a carteira |
+| GET | `/vehicles/{vin}` | **Passaporte**: garantia, próxima revisão, aderência à rede, telemetria e histórico |
+| PUT | `/vehicles/{vin}` | Atualiza veículo (transferir para outro dono exige o novo dono na carteira) |
+| DELETE | `/vehicles/{vin}` | Inativa veículo (status = INATIVO) — GERENTE e ADMIN |
+| GET | `/vehicles/{vin}/agendamentos` | Agendamentos do veículo na unidade do usuário |
+
+Campos **derivados na leitura** (não armazenados): `garantia.status` (`ATIVA`, `PROXIMA_DO_FIM` com 90
+dias ou menos, `ENCERRADA`), `proximaRevisaoPrevista.situacao` (`EM_DIA`, `PROXIMA` com 30 dias ou
+1.000 km ou menos, `VENCIDA`) e `aderenciaRede` (fração das ordens de serviço feitas na rede Ford).
 
 ### Agendamentos
 

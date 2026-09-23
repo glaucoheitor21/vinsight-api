@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 public record DadosCadastroVeiculo(
-        @NotBlank @Size(min = 17, max = 17) @Pattern(regexp = "[A-HJ-NPR-Z0-9]{17}") String vin,
+        @NotBlank @Pattern(regexp = Vin.REGEX, message = Vin.MENSAGEM) String vin,
         @NotBlank @Size(min = 7, max = 7) String placa,
         @NotBlank @Size(max = 50) String modelo,
         @Size(max = 100) String versao,
