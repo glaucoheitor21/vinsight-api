@@ -1,12 +1,7 @@
-package br.com.fiap.vinsight_api.controller;
+package br.com.fiap.vinsight_api.usuario;
 
 import br.com.fiap.vinsight_api.infra.security.DadosTokenJWT;
 import br.com.fiap.vinsight_api.infra.security.TokenService;
-import br.com.fiap.vinsight_api.usuario.DadosLogin;
-import br.com.fiap.vinsight_api.usuario.DadosRefresh;
-import br.com.fiap.vinsight_api.usuario.DadosUsuarioLogado;
-import br.com.fiap.vinsight_api.usuario.Usuario;
-import br.com.fiap.vinsight_api.usuario.UsuarioRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

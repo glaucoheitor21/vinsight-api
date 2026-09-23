@@ -213,7 +213,7 @@ for i, v in enumerate(range(1, TOTAL_VEIC + 1, 2), start=1):
     if i > 20:
         break
     agend.append((i, v, veic_conc[v], dt.datetime(2026, 10, 1 + i % 28, 8 + i % 9, 0, 0),
-                  ["REVISAO", "REPARO", "GARANTIA", "RECALL"][i % 4],
+                  ["REVISAO_PROGRAMADA", "REPARO", "GARANTIA", "RECALL"][i % 4],
                   ["AGENDADO", "CONFIRMADO", "REALIZADO", "CANCELADO"][i % 4],
                   None, round(500 + (i * 137) % 1500, 2),
                   dt.datetime(2026, 9, 1 + i % 20, 11, 0, 0)))

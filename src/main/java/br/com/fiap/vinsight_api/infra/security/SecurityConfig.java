@@ -1,5 +1,6 @@
 package br.com.fiap.vinsight_api.infra.security;
 
+import br.com.fiap.vinsight_api.infra.web.CorrelationIdFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,8 +54,11 @@ public class SecurityConfig {
                                     "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"
                             ));
                             configuration.setAllowedHeaders(List.of(
-                                    "Authorization", "Content-Type", "Accept", "Origin", "Idempotency-Key"
+                                    "Authorization", "Content-Type", "Accept", "Origin", "Idempotency-Key",
+                                    CorrelationIdFilter.HEADER
                             ));
+                            // Headers que o front web pode ler na resposta
+                            configuration.setExposedHeaders(List.of("Location", CorrelationIdFilter.HEADER));
                             configuration.setAllowCredentials(true);
                             return configuration;
                         }))

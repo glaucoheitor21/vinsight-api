@@ -95,9 +95,9 @@ public class TokenService {
                     .getSubject();
             return Long.valueOf(subject);
         } catch (TokenExpiredException ex) {
-            throw new TokenInvalidoException("Token JWT expirado.", ex);
+            throw new TokenInvalidoException("Token JWT expirado.", ex, true);
         } catch (JWTVerificationException | NumberFormatException ex) {
-            throw new TokenInvalidoException("Token JWT inválido.", ex);
+            throw new TokenInvalidoException("Token JWT inválido.", ex, false);
         }
     }
 

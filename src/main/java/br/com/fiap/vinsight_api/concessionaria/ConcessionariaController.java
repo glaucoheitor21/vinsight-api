@@ -1,12 +1,7 @@
-package br.com.fiap.vinsight_api.controller;
+package br.com.fiap.vinsight_api.concessionaria;
 
 import br.com.fiap.vinsight_api.agendamento.AgendamentoService;
 import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
-import br.com.fiap.vinsight_api.concessionaria.ConcessionariaService;
-import br.com.fiap.vinsight_api.concessionaria.DadosAtualizacaoConcessionaria;
-import br.com.fiap.vinsight_api.concessionaria.DadosCadastroConcessionaria;
-import br.com.fiap.vinsight_api.concessionaria.DadosDetalheConcessionaria;
-import br.com.fiap.vinsight_api.concessionaria.DadosListagemConcessionaria;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -15,8 +10,8 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

@@ -19,8 +19,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class ContextoSeguranca {
 
-    public static final String MSG_OUTRA_CONCESSIONARIA = "Recurso pertence a outra concessionária.";
-
     public Usuario usuarioLogado() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Usuario usuario) {
@@ -78,7 +76,7 @@ public class ContextoSeguranca {
 
     private void verificarMesmaConcessionaria(Long escopo, Long concessionariaId) {
         if (!escopo.equals(concessionariaId)) {
-            throw new AccessDeniedException(MSG_OUTRA_CONCESSIONARIA);
+            throw new AcessoForaDoEscopoException();
         }
     }
 }

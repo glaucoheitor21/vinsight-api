@@ -27,7 +27,7 @@ import java.io.IOException;
 @Component
 public class SecurityFilter extends OncePerRequestFilter {
 
-    // Lido pelo AutenticacaoEntryPoint para explicar o motivo do 401
+    // Guarda a TokenInvalidoException; o AutenticacaoEntryPoint a usa para escolher o "type" do 401
     public static final String ATRIBUTO_ERRO_TOKEN = "vinsight.erroToken";
 
     @Autowired
@@ -57,7 +57,7 @@ public class SecurityFilter extends OncePerRequestFilter {
                             SecurityContextHolder.getContext().setAuthentication(authentication);
                         });
             } catch (TokenInvalidoException ex) {
-                request.setAttribute(ATRIBUTO_ERRO_TOKEN, ex.getMessage());
+                request.setAttribute(ATRIBUTO_ERRO_TOKEN, ex);
             }
         }
 
