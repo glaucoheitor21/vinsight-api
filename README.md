@@ -315,10 +315,10 @@ Com o MySQL no ar, esse comando roda a suíte inteira e gera o relatório de cob
 
 ### Resultado
 
-Última execução completa (25/09/2026, `./mvnw verify`):
+Última execução completa (26/09/2026, `./mvnw verify`):
 
 ```
-[INFO] Tests run: 133, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 151, Failures: 0, Errors: 0, Skipped: 0
 [INFO] BUILD SUCCESS
 ```
 
@@ -330,8 +330,8 @@ Com o MySQL no ar, esse comando roda a suíte inteira e gera o relatório de cob
 | `cliente` (Customer Service) | 89% |
 | `infra.exception` (RFC 7807) | 89% |
 | `veiculo` (Vehicle Service) | 82% |
-| `usuario`, `shared`, `ordemservico`, `infra.web`, `config` | 100% |
-| **Total** | **92%** |
+| `config` (Swagger), `usuario`, `shared`, `ordemservico`, `infra.web` | 100% |
+| **Total** | **93%** |
 
 - Relatório de cobertura: `target/site/jacoco/index.html` (JaCoCo).
 - Resultado de cada teste: `target/surefire-reports/`.
@@ -351,7 +351,7 @@ A máquina do CI roda em **UTC**. A aplicação e os testes fixam o fuso de Bras
 
 | Tipo | Classes | Como roda |
 |---|---|---|
-| **Integração** (API ponta a ponta) | `*ControllerTest`, `ErrosApiTest`, `ErroInternoTest` | Sobe a aplicação inteira e faz requisições HTTP pelo MockMvc, com **token JWT real** em cada chamada, contra o **MySQL de verdade** |
+| **Integração** (API ponta a ponta) | `*ControllerTest`, `ErrosApiTest`, `ErroInternoTest`, `DocumentacaoOpenApiTest` | Sobe a aplicação inteira e faz requisições HTTP pelo MockMvc, com **token JWT real** em cada chamada, contra o **MySQL de verdade** |
 | **Unidade** (regras de domínio) | `VeiculoTest`, `LeadTest`, `MascaradorDadosTest`, `SenhasDemonstracaoTest` | JUnit 5 puro e Mockito, sem Spring nem banco |
 
 - **Banco isolado:** o perfil `test` usa um schema separado, o `vinsight_test`, criado sozinho e com
@@ -381,18 +381,44 @@ cenários BDD das histórias estão automatizados:
 | US-30 | Perfil sem permissão → 403 (analista na fila, consultor escrevendo em concessionária) | todos os `*ControllerTest` |
 | US-31 | Validação → 422 listando o campo; erro inesperado → 500 sem stack trace nem nome de classe | `ErrosApiTest`, `ErroInternoTest` |
 | US-31 | Criação → 201 com `Location` | `ClienteControllerTest`, `VeiculoControllerTest`, `AgendamentoControllerTest` |
+| US-32 | Documentação reflete a API real (códigos de cada endpoint, formato dos erros, contrato); chamada autenticada com o exemplo do Swagger → 200 | `DocumentacaoOpenApiTest` |
 | US-33 | Visão 360° agregada; mascaramento por perfil; cliente inexistente → 404 | `ClienteControllerTest` |
 | US-34 | Passaporte completo, histórico em ordem decrescente; VIN inválido → 422 **sem chamar o serviço** (verificado com Mockito) | `VeiculoControllerTest` |
 | US-35 | Fila por score decrescente; cliente sem consentimento suprimido (LGPD); desfecho AGENDADO encerra o lead; reenvio com `Idempotency-Key` não duplica | `LeadControllerTest` |
 
 Para zerar o banco de teste: `DROP DATABASE vinsight_test;`. Ele é recriado na execução seguinte.
 
-## Documentação interativa
+## Documentação interativa (Swagger)
 
 - **Swagger UI:** http://localhost:8080/swagger-ui.html
-- **OpenAPI JSON:** http://localhost:8080/api-docs
+- **Especificação OpenAPI 3.1:** http://localhost:8080/api-docs · cópia versionada em
+  [`docs/openapi.json`](docs/openapi.json), que pode ser importada no Postman ou no Insomnia
 
-Todos os endpoints estão anotados com `@Operation` e `@Tag`, então o Swagger já apresenta as operações agrupadas por recurso.
+O que a documentação mostra:
+
+- **Um grupo por serviço de domínio**, na ordem do fluxo do app: Autenticação, Leads, Clientes,
+  Veículos, Agendamentos e Concessionárias, além do health check público.
+- **Chamadas autenticadas pela própria página:** faça o login com o exemplo que já vem preenchido
+  (`consultor@ford.com.br` / `consultor123`), copie o `accessToken` e cole no botão **Authorize**. O
+  token sobrevive a um recarregamento da página.
+- **Todos os códigos de resposta de cada endpoint**, com um exemplo de cada erro no formato RFC 7807:
+  201 com `Location` na criação, 204 na remoção, 400, 401, 403, 404, 409, 422 e 500.
+- **Exemplos de requisição** nos corpos mais usados pelo app (login, desfecho do lead, agendamento).
+
+Os códigos de resposta **não são anotados à mão** em cada endpoint. O
+[`DocumentacaoRespostas`](src/main/java/br/com/fiap/vinsight_api/config/DocumentacaoRespostas.java)
+os deduz da assinatura de cada método: `@PreAuthorize` gera 401 e 403, `{id}` na rota gera 404, corpo
+validado gera 400 e 422, `POST` gera 201 e `DELETE` gera 204. Só os erros de regra de negócio (como
+"CPF já cadastrado") são declarados, com `@ErroDocumentado`. Um endpoint novo já nasce documentado.
+
+O teste `DocumentacaoOpenApiTest` confere isso a cada build: todo endpoint protegido documenta 401,
+toda rota com identificador documenta 404, todo erro usa o formato RFC 7807, os endpoints do contrato
+estão presentes, e o exemplo de login funciona de verdade. Ele também falha se `docs/openapi.json`
+ficar desatualizado. Para regenerar a cópia depois de mudar um endpoint:
+
+```bash
+./mvnw test -Dtest=DocumentacaoOpenApiTest -Dopenapi.atualizar=true
+```
 
 ## Estrutura de pacotes
 

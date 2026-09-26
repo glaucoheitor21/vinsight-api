@@ -2,6 +2,8 @@ package br.com.fiap.vinsight_api.concessionaria;
 
 import br.com.fiap.vinsight_api.agendamento.AgendamentoService;
 import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
+import br.com.fiap.vinsight_api.config.ErroDocumentado;
+import br.com.fiap.vinsight_api.infra.exception.TipoProblema;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -37,6 +39,7 @@ public class ConcessionariaController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cadastra uma nova concessionária")
+    @ErroDocumentado(tipo = TipoProblema.CONFLITO, quando = "CNPJ já cadastrado.")
     public ResponseEntity<DadosDetalheConcessionaria> cadastrar(
             @RequestBody @Valid DadosCadastroConcessionaria dados,
             UriComponentsBuilder uriBuilder) {

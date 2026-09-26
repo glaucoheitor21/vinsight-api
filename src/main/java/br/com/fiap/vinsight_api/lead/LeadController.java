@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.lead;
 
+import br.com.fiap.vinsight_api.config.ErroDocumentado;
+import br.com.fiap.vinsight_api.infra.exception.TipoProblema;
 import br.com.fiap.vinsight_api.infra.idempotencia.ServicoIdempotencia;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +43,7 @@ public class LeadController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Registra um lead gerado pelo modelo de churn (cliente sem consentimento entra já suprimido)")
+    @ErroDocumentado(tipo = TipoProblema.CONFLITO, quando = "O veículo não pertence ao cliente informado.")
     public ResponseEntity<DadosDetalheLead> cadastrar(
             @RequestBody @Valid DadosCadastroLead dados,
             UriComponentsBuilder uriBuilder) {
@@ -52,7 +55,10 @@ public class LeadController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
-    @Operation(summary = "Fila de leads da unidade, por padrão do maior score para o menor (sem leads suprimidos)")
+    @Operation(summary = "Fila de leads da unidade, por padrão do maior score para o menor (sem leads suprimidos)",
+            description = "A fila do dia do consultor: use `?status=OPEN`. Vem sempre restrita à concessionária do "
+                    + "usuário (tirada do token) e nunca traz leads de clientes sem consentimento (LGPD). "
+                    + "`faixaRisco` é derivada do score: ALTO (>= 0,70), MEDIO (0,40 a 0,69), BAIXO (< 0,40).")
     public ResponseEntity<DadosPagina<DadosFilaLead>> fila(
             @Parameter(description = "Ex.: OPEN para a fila de trabalho do dia")
             @RequestParam(required = false) StatusLead status,
@@ -72,7 +78,12 @@ public class LeadController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
-    @Operation(summary = "Registra o desfecho de um contato (CONTATADO, AGENDADO, SEM_SUCESSO, RECUSADO, NUMERO_INVALIDO)")
+    @Operation(summary = "Registra o desfecho de um contato (CONTATADO, AGENDADO, SEM_SUCESSO, RECUSADO, NUMERO_INVALIDO)",
+            description = "Cada desfecho fica gravado no histórico do lead (base do retreinamento do modelo). "
+                    + "Envie um UUID no header `Idempotency-Key`, gerado quando o usuário toca no botão: "
+                    + "reenviar a mesma chave (ex.: depois de uma queda de rede) devolve a resposta original, "
+                    + "com o header `Idempotent-Replayed: true`, sem gravar de novo. A mesma chave com outro corpo responde 422.")
+    @ErroDocumentado(tipo = TipoProblema.CONFLITO, quando = "Lead já encerrado (AGENDADO, RECUSADO ou NUMERO_INVALIDO) ou suprimido pela LGPD.")
     public ResponseEntity<DadosDetalheLead> registrarDesfecho(
             @PathVariable Long id,
             @Parameter(description = "UUID gerado pelo app por ação. Reenviar a mesma chave não duplica o registro.")

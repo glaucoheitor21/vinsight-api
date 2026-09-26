@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.usuario;
 
+import br.com.fiap.vinsight_api.config.ErroDocumentado;
+import br.com.fiap.vinsight_api.infra.exception.TipoProblema;
 import br.com.fiap.vinsight_api.infra.security.DadosTokenJWT;
 import br.com.fiap.vinsight_api.infra.security.TokenService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +34,7 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "Autentica por e-mail e senha e devolve access token (15 min) e refresh token (8 h)")
+    @ErroDocumentado(tipo = TipoProblema.CREDENCIAIS_INVALIDAS, quando = "E-mail ou senha inválidos. E-mail inexistente e usuário inativo dão a mesma resposta.")
     public ResponseEntity<DadosTokenJWT> login(@RequestBody @Valid DadosLogin dados) {
         var token = new UsernamePasswordAuthenticationToken(dados.email(), dados.senha());
         Authentication authentication = manager.authenticate(token);
@@ -40,6 +43,8 @@ public class AuthController {
 
     @PostMapping("/refresh")
     @Operation(summary = "Troca um refresh token válido por um novo par de tokens")
+    @ErroDocumentado(tipo = TipoProblema.TOKEN_INVALIDO, quando = "Refresh token adulterado, ou access token enviado no lugar dele.")
+    @ErroDocumentado(tipo = TipoProblema.TOKEN_EXPIRADO, quando = "Refresh token vencido (8 horas): é preciso fazer login de novo.")
     public ResponseEntity<DadosTokenJWT> refresh(@RequestBody @Valid DadosRefresh dados) {
         Long usuarioId = tokenService.validarRefreshToken(dados.refreshToken());
         // Usuario apagado ou inativado depois do login nao renova a sessao

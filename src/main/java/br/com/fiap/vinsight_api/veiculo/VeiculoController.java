@@ -1,6 +1,8 @@
 package br.com.fiap.vinsight_api.veiculo;
 
 import br.com.fiap.vinsight_api.agendamento.DadosListagemAgendamento;
+import br.com.fiap.vinsight_api.config.ErroDocumentado;
+import br.com.fiap.vinsight_api.infra.exception.TipoProblema;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +45,7 @@ public class VeiculoController {
     @PostMapping
     @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cadastra um novo veículo para um cliente da carteira")
+    @ErroDocumentado(tipo = TipoProblema.CONFLITO, quando = "VIN ou placa já cadastrados.")
     public ResponseEntity<DadosDetalheVeiculo> cadastrar(
             @RequestBody @Valid DadosCadastroVeiculo dados,
             UriComponentsBuilder uriBuilder) {

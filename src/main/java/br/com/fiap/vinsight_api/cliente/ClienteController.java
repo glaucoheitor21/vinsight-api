@@ -1,5 +1,7 @@
 package br.com.fiap.vinsight_api.cliente;
 
+import br.com.fiap.vinsight_api.config.ErroDocumentado;
+import br.com.fiap.vinsight_api.infra.exception.TipoProblema;
 import br.com.fiap.vinsight_api.shared.DadosPagina;
 import br.com.fiap.vinsight_api.veiculo.DadosListagemVeiculo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +45,7 @@ public class ClienteController {
     @PostMapping
     @PreAuthorize("hasAnyRole('CONSULTOR', 'GERENTE', 'ADMIN')")
     @Operation(summary = "Cadastra um novo cliente (entra na carteira da unidade de quem cadastrou)")
+    @ErroDocumentado(tipo = TipoProblema.CONFLITO, quando = "CPF já cadastrado.")
     public ResponseEntity<DadosDetalheCliente> cadastrar(
             @RequestBody @Valid DadosCadastroCliente dados,
             UriComponentsBuilder uriBuilder) {
