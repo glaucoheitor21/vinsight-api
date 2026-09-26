@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.MethodParameter;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.data.core.PropertyReferenceException;
@@ -25,8 +26,12 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
@@ -167,11 +172,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                             WebRequest request) {
         List<Violacao> violacoes = new ArrayList<>();
         ex.getParameterValidationResults().forEach(resultado -> {
-            String parametro = resultado.getMethodParameter().getParameterName();
-            resultado.getResolvableErrors().forEach(erro ->
-                    violacoes.add(new Violacao(parametro, erro.getDefaultMessage())));
+            if (resultado instanceof ParameterErrors errosDoObjeto) {
+                // @Valid @RequestBody validado junto com outro parametro restrito (ex.: o header
+                // Idempotency-Key do PATCH de lead): os erros vem aqui, e nao em
+                // MethodArgumentNotValidException. Aponta o campo do corpo, nao o nome do parametro Java.
+                errosDoObjeto.getFieldErrors().forEach(fe -> violacoes.add(new Violacao(fe.getField(), fe.getDefaultMessage())));
+                errosDoObjeto.getGlobalErrors().forEach(ge -> violacoes.add(new Violacao(ge.getObjectName(), ge.getDefaultMessage())));
+            } else {
+                String parametro = nomeNaRequisicao(resultado.getMethodParameter());
+                resultado.getResolvableErrors().forEach(erro ->
+                        violacoes.add(new Violacao(parametro, erro.getDefaultMessage())));
+            }
         });
         return validacao(violacoes, request);
+    }
+
+    // Nome que o cliente enxerga ("Idempotency-Key", "vin"), e nao o da variavel Java ("idempotencyKey")
+    private static String nomeNaRequisicao(MethodParameter parametro) {
+        RequestHeader header = parametro.getParameterAnnotation(RequestHeader.class);
+        if (header != null && !header.value().isBlank()) return header.value();
+        RequestParam param = parametro.getParameterAnnotation(RequestParam.class);
+        if (param != null && !param.value().isBlank()) return param.value();
+        PathVariable path = parametro.getParameterAnnotation(PathVariable.class);
+        if (path != null && !path.value().isBlank()) return path.value();
+        return parametro.getParameterName();
     }
 
     // JSON malformado -> 400. Valor que nao converte para o tipo do campo (enum desconhecido,

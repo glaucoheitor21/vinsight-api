@@ -104,23 +104,76 @@ quando o endpoint de login existir.
 Os dois consultores em unidades diferentes existem de propósito: são eles que provam o escopo de
 dados por concessionária da US-30.
 
-## Executar os testes
+## Testes automatizados
 
 ```bash
 ./mvnw verify
 ```
 
-Roda no perfil `test`, que usa um **schema separado** `vinsight_test` no mesmo MySQL local. Ele é
-criado sozinho no primeiro `verify` e recebe apenas as migrations `V1→V12` — sem a massa de
-demonstração. Assim os testes nunca escrevem no banco `vinsight` usado na apresentação, e nunca
-dependem do que o seed deixou lá.
+Com o MySQL no ar, esse comando roda a suíte inteira e gera o relatório de cobertura.
 
-Como o perfil usa `spring.jpa.hibernate.ddl-auto=validate`, o build também falha se uma entidade
-divergir do schema criado pelas migrations.
+### Resultado
 
-Para zerar o banco de teste: `DROP DATABASE vinsight_test;` — ele é recriado na execução seguinte.
+Última execução completa (25/09/2026, `./mvnw verify`):
 
-O relatório JaCoCo fica em `target/site/jacoco/index.html`.
+```
+[INFO] Tests run: 133, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+```
+
+| Pacote | Cobertura de linhas |
+|---|---|
+| `lead` (Lead Engine) | 98% |
+| `infra.security` (JWT, escopo, mascaramento, auditoria) | 97% |
+| `agendamento` | 93% |
+| `cliente` (Customer Service) | 89% |
+| `infra.exception` (RFC 7807) | 89% |
+| `veiculo` (Vehicle Service) | 82% |
+| `usuario`, `shared`, `ordemservico`, `infra.web`, `config` | 100% |
+| **Total** | **92%** |
+
+- Relatório de cobertura: `target/site/jacoco/index.html` (JaCoCo).
+- Resultado de cada teste: `target/surefire-reports/`.
+
+### Como a suíte é montada
+
+| Tipo | Classes | Como roda |
+|---|---|---|
+| **Integração** (API ponta a ponta) | `*ControllerTest`, `ErrosApiTest`, `ErroInternoTest` | Sobe a aplicação inteira e faz requisições HTTP pelo MockMvc, com **token JWT real** em cada chamada, contra o **MySQL de verdade** |
+| **Unidade** (regras de domínio) | `VeiculoTest`, `LeadTest`, `MascaradorDadosTest`, `SenhasDemonstracaoTest` | JUnit 5 puro e Mockito, sem Spring nem banco |
+
+- **Banco isolado:** o perfil `test` usa um schema separado, o `vinsight_test`, criado sozinho e com
+  todas as migrations (V1 a V14), mas sem a massa de demonstração. Os testes nunca tocam o banco
+  `vinsight` da apresentação.
+- **Dados próprios:** cada teste carrega `src/test/resources/dados-teste.sql`, uma massa pequena
+  (2 concessionárias, 7 usuários, 4 clientes, 6 leads) em que cada registro existe para provar um
+  caso: cliente sem consentimento, cliente em duas carteiras, garantia perto do fim.
+- **Nenhum resíduo:** cada teste roda numa transação desfeita no fim, inclusive o que a API gravou.
+  A ordem de execução não importa, e o `vinsight_test` termina vazio.
+- **Data fixa:** o "hoje" dos testes é 22/09/2026 (`RelogioFixoConfig`), então os status de garantia
+  e revisão não mudam com o calendário.
+- **Schema conferido:** com `ddl-auto=validate`, a suíte também falha se uma entidade divergir das
+  migrations.
+
+### O que é coberto
+
+Cada recurso tem cenários de **sucesso**, **erro** (422, 404, 409) e **acesso não autorizado**
+(401 sem token ou com token inválido, 403 por perfil e 403 por outra concessionária). Todos os
+cenários BDD das histórias estão automatizados:
+
+| História | Cenário | Teste |
+|---|---|---|
+| US-29 | Login gera JWT com as claims do contrato; access e refresh não se confundem; token expirado → 401 | `AuthControllerTest` |
+| US-29 | Credencial errada e e-mail inexistente dão a mesma resposta (não revela o e-mail) | `AuthControllerTest` |
+| US-30 | Consultor vê só a própria unidade; consultor da unidade A pedindo lead da unidade B → 403 | `LeadControllerTest`, `AgendamentoControllerTest` |
+| US-30 | Perfil sem permissão → 403 (analista na fila, consultor escrevendo em concessionária) | todos os `*ControllerTest` |
+| US-31 | Validação → 422 listando o campo; erro inesperado → 500 sem stack trace nem nome de classe | `ErrosApiTest`, `ErroInternoTest` |
+| US-31 | Criação → 201 com `Location` | `ClienteControllerTest`, `VeiculoControllerTest`, `AgendamentoControllerTest` |
+| US-33 | Visão 360° agregada; mascaramento por perfil; cliente inexistente → 404 | `ClienteControllerTest` |
+| US-34 | Passaporte completo, histórico em ordem decrescente; VIN inválido → 422 **sem chamar o serviço** (verificado com Mockito) | `VeiculoControllerTest` |
+| US-35 | Fila por score decrescente; cliente sem consentimento suprimido (LGPD); desfecho AGENDADO encerra o lead; reenvio com `Idempotency-Key` não duplica | `LeadControllerTest` |
+
+Para zerar o banco de teste: `DROP DATABASE vinsight_test;`. Ele é recriado na execução seguinte.
 
 ## Documentação interativa
 
