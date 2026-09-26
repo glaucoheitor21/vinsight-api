@@ -1,0 +1,91 @@
+# US-53: integração contínua. A cada push e pull request na master, o GitHub sobe uma máquina
+# limpa com MySQL, roda a suíte inteira (./mvnw verify) e publica o resultado e a cobertura.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: # permite rodar na mão pela aba Actions
+
+# Um push novo cancela a execução anterior ainda em andamento na mesma branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Build e testes (Java 21 + MySQL 8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Mesmo banco do desenvolvimento, sem H2: os testes rodam as migrations reais num MySQL de verdade
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: fiap
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pfiap"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      # Aponta o perfil "test" para o MySQL do CI (mesmos parâmetros de application-test.properties)
+      DB_TEST_URL: jdbc:mysql://127.0.0.1:3306/vinsight_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=America/Sao_Paulo&createDatabaseIfNotExist=true
+      DB_USER: root
+      DB_PASSWORD: fiap
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar o Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Rodar a suíte (./mvnw verify)
+        run: |
+          chmod +x mvnw
+          ./mvnw -B verify
+
+      - name: Resumo dos testes e da cobertura
+        if: always()
+        run: |
+          soma() {
+            grep -h -o '<testsuite [^>]*' target/surefire-reports/TEST-*.xml 2>/dev/null \
+              | grep -o " $1=\"[0-9]*\"" | grep -o '[0-9]*' | awk '{s+=$1} END{print s+0}'
+          }
+          {
+            echo "## Resultado da suíte"
+            echo ""
+            echo "| Testes | Falhas | Erros | Ignorados |"
+            echo "|---|---|---|---|"
+            echo "| $(soma tests) | $(soma failures) | $(soma errors) | $(soma skipped) |"
+            if [ -f target/site/jacoco/jacoco.csv ]; then
+              echo ""
+              awk -F, 'NR>1{li+=$8; lc+=$9; bi+=$6; bc+=$7}
+                END{printf "**Cobertura (JaCoCo):** %.1f%% das linhas, %.1f%% dos ramos\n", 100*lc/(li+lc), 100*bc/(bi+bc)}' \
+                target/site/jacoco/jacoco.csv
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar relatórios (cobertura e testes)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-testes
+          path: |
+            target/site/jacoco/
+            target/surefire-reports/
+          retention-days: 30
