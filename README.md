@@ -1,5 +1,7 @@
 # VINSight Ford API
 
+[![CI](https://github.com/Challenge-2026-VinsightFord/vinsight-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Challenge-2026-VinsightFord/vinsight-api/actions/workflows/ci.yml)
+
 Backend Spring Boot da plataforma **VINSight Ford** — Challenge FIAP 2026 / Ford Motor Company / Desafio 02.
 
 ## Equipe
@@ -333,6 +335,17 @@ Com o MySQL no ar, esse comando roda a suíte inteira e gera o relatório de cob
 
 - Relatório de cobertura: `target/site/jacoco/index.html` (JaCoCo).
 - Resultado de cada teste: `target/surefire-reports/`.
+
+### Integração contínua (GitHub Actions)
+
+A cada push e pull request na `master`, o workflow [`ci.yml`](.github/workflows/ci.yml) sobe uma
+máquina limpa com **MySQL 8**, roda `./mvnw verify` e publica o resultado. O selo **CI** no topo
+deste README mostra o estado da última execução. Na aba
+[Actions](https://github.com/Challenge-2026-VinsightFord/vinsight-api/actions), cada execução traz o
+resumo (testes e cobertura) e o artefato `relatorios-testes` com o relatório do JaCoCo para baixar.
+
+A máquina do CI roda em **UTC**. A aplicação e os testes fixam o fuso de Brasília, então o resultado
+é o mesmo em qualquer máquina.
 
 ### Como a suíte é montada
 
