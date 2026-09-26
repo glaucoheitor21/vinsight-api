@@ -9,11 +9,188 @@ Backend Spring Boot da plataforma **VINSight Ford** — Challenge FIAP 2026 / Fo
 
 ## Sobre
 
-API REST que dá suporte à plataforma de retenção de clientes pós-venda da Ford. Implementa CRUD de **Clientes**, **Veículos**, **Agendamentos**, **Concessionárias** e **Leads** (gerados pelo modelo de IA do VINSight Core), seguindo SOA com separação clara de camadas (Controller / Service / Repository / Entity) e package-by-feature.
+API REST que sustenta a plataforma de retenção pós-venda da Ford: entrega ao **consultor de serviço
+da concessionária** uma fila de clientes priorizada pelo risco de evasão, a visão 360° de cada
+cliente e o passaporte de cada veículo, e registra o desfecho de cada contato para realimentar o
+modelo de IA.
+
+Organizada em serviços por domínio (**Auth**, **Customer**, **Vehicle**, **Lead Engine**,
+**Agendamentos** e **Concessionárias**), com autenticação **JWT**, controle de acesso por **perfil**
+e por **concessionária**, mascaramento de dados pessoais (**LGPD**) e erros padronizados em
+**RFC 7807**.
 
 ## Arquitetura
 
-<img width="2400" height="1600" alt="VINSight_Ford_SpringBoot_Diagram" src="https://github.com/user-attachments/assets/de02e88a-ea60-42ec-afe2-d9401cf54ba7" />
+A API é o backend SOA da plataforma: atende o **app do consultor** (React Native / Expo), recebe os
+leads gerados pela **camada de inteligência** (Python) e guarda tudo num **MySQL** com schema
+versionado pelo Flyway. É **stateless**: não há sessão no servidor, e cada requisição se identifica
+com um token JWT.
+
+### Componentes e responsabilidades
+
+```mermaid
+flowchart LR
+    subgraph CLIENTES["Quem consome a API"]
+        direction TB
+        APP["App do consultor<br/>React Native / Expo"]
+        SWG["Swagger UI<br/>documentação interativa"]
+        ML["Camada de inteligência<br/>Python · modelo de churn"]
+    end
+
+    subgraph API["vinsight-api · Spring Boot 4"]
+        direction TB
+        subgraph BORDA["1 · Borda: cadeia de filtros"]
+            direction LR
+            CID["CorrelationIdFilter<br/>um id por requisição"]
+            SEC["SecurityFilter<br/>valida o JWT"]
+            CID --> SEC
+        end
+        subgraph SERVICOS["2 · Serviços de domínio"]
+            direction LR
+            AUTH["Auth<br/>/auth"]
+            CUS["Customer<br/>/customers"]
+            VEH["Vehicle<br/>/vehicles"]
+            LEAD["Lead Engine<br/>/leads"]
+            AGD["Agendamentos<br/>/agendamentos"]
+            CON["Concessionárias<br/>/concessionarias"]
+        end
+        subgraph TRANSVERSAIS["3 · Componentes transversais"]
+            direction LR
+            CTX["ContextoSeguranca<br/>escopo por unidade"]
+            MASK["MascaradorDados<br/>LGPD"]
+            IDEM["ServicoIdempotencia<br/>Idempotency-Key"]
+            ERR["GlobalExceptionHandler<br/>RFC 7807 + auditoria"]
+        end
+        BORDA --> SERVICOS
+        SERVICOS --> TRANSVERSAIS
+    end
+
+    DB[("MySQL 8<br/>schema versionado<br/>pelo Flyway")]
+
+    APP -- "HTTP + Bearer JWT" --> CID
+    SWG -- "HTTP + Bearer JWT" --> CID
+    ML -- "POST /leads · perfil ADMIN" --> CID
+    SERVICOS -- "Spring Data JPA" --> DB
+```
+
+| Bloco | Componente | Responsabilidade |
+|---|---|---|
+| **Borda** | `CorrelationIdFilter` | Dá um id a cada requisição (header `X-Correlation-Id`), que aparece em toda linha de log e em todo erro |
+| | `SecurityFilter` + `TokenService` | Validam o JWT (assinatura, expiração e tipo) e carregam o usuário e o perfil |
+| **Serviços** | Auth · Customer · Vehicle · Lead Engine · Agendamentos · Concessionárias | Um pacote por domínio, cada um com controller, service, repository, entidades e DTOs |
+| **Transversais** | `ContextoSeguranca` | Escopo de dados: o consultor só vê a própria concessionária, que vem do token e nunca da URL |
+| | `MascaradorDados` | LGPD: CPF, telefone e e-mail mascarados para o perfil CONSULTOR |
+| | `ServicoIdempotencia` | `Idempotency-Key`: reenviar a mesma ação não duplica o registro |
+| | `GlobalExceptionHandler` + `AuditoriaAcesso` | Todo erro em RFC 7807 (`application/problem+json`); todo 403 registrado na trilha de auditoria |
+| **Dados** | MySQL 8 + Flyway | Schema versionado (`db/migration`) e massa de demonstração separada (`db/seed`, só no perfil `dev`) |
+
+### Camadas dentro de cada serviço
+
+```mermaid
+flowchart TB
+    REQ(["Requisição HTTP já autenticada"])
+    CTRL["<b>Controller</b><br/>rota e verbo HTTP · @PreAuthorize por perfil<br/>@Valid no corpo · status code e Location"]
+    SVC["<b>Service</b><br/>regra de negócio · escopo da concessionária<br/>transação · mascaramento · idempotência"]
+    REPO["<b>Repository</b><br/>consultas JPA / JPQL<br/>fila de leads, carteira de clientes, histórico"]
+    ENT["<b>Entity</b><br/>estado e regras do próprio domínio<br/>ex.: Lead.registrarDesfecho, Veiculo.statusGarantia"]
+    DB[("MySQL")]
+
+    REQ --> CTRL
+    CTRL -- "DTO de entrada: record Dados*" --> SVC
+    SVC --> REPO
+    REPO --> ENT
+    ENT --> DB
+    SVC -. "DTO de saída: record Dados*<br/>nunca a entidade" .-> CTRL
+```
+
+### Fluxo de autenticação com JWT
+
+O access token vale **15 minutos** e o refresh token, **8 horas**. Os dois são assinados com
+HMAC-256 e carregam `sub` (id do usuário), `email`, `perfil`, `concessionariaId` e `tipo`. A claim
+`tipo` impede que um refresh token seja aceito no lugar de um access token, e vice-versa.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Consultor (app)
+    participant F as Filtros<br/>CorrelationId + SecurityFilter
+    participant A as AuthController
+    participant M as AuthenticationManager<br/>+ AutenticacaoService
+    participant T as TokenService
+    participant L as LeadController
+    participant S as LeadService<br/>+ ContextoSeguranca
+    participant DB as MySQL
+
+    Note over U,DB: Login (rota pública)
+    U->>F: POST /api/v1/auth/login {email, senha}
+    F->>A: rota pública, segue sem token
+    A->>M: autenticar email e senha
+    M->>DB: busca o usuário pelo e-mail
+    M-->>A: usuário ativo, senha conferida com BCrypt
+    A->>T: gerar access token (15 min) e refresh token (8 h)
+    T-->>A: JWT assinado com HMAC-256<br/>sub, email, perfil, concessionariaId, tipo
+    A-->>U: 200 {accessToken, refreshToken, expiresIn, usuario}
+
+    Note over U,DB: Requisição autenticada
+    U->>F: GET /api/v1/leads com Authorization: Bearer (access token)
+    F->>T: confere assinatura, expiração e tipo ACCESS
+    F->>DB: carrega o usuário pelo sub e confere se está ativo
+    F->>L: SecurityContext com o usuário e o perfil
+    L->>L: @PreAuthorize: este perfil pode ler leads?
+    L->>S: fila de leads com os filtros pedidos
+    S->>S: concessionária do usuário vem do token, nunca da URL
+    S->>DB: leads da unidade, sem os suprimidos pela LGPD
+    S-->>U: 200 fila paginada
+
+    Note over U,DB: Quando o access token vence
+    U->>F: POST /api/v1/auth/refresh {refreshToken}
+    F->>A: rota pública
+    A->>T: confere o refresh token (tipo REFRESH)
+    A-->>U: 200 novo par de tokens
+```
+
+### Onde cada acesso é barrado
+
+Há três pontos de controle, nesta ordem: **token** (401), **perfil** (403) e **concessionária do
+recurso** (403). Endpoints públicos: `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`,
+`GET /actuator/health` e o Swagger.
+
+```mermaid
+sequenceDiagram
+    participant U as App
+    participant F as SecurityFilter
+    participant E as AutenticacaoEntryPoint
+    participant C as Controller<br/>@PreAuthorize
+    participant S as Service<br/>ContextoSeguranca
+    participant H as GlobalExceptionHandler
+
+    U->>F: requisição para rota protegida
+    alt sem token, token adulterado ou expirado
+        F->>E: segue sem usuário autenticado
+        E->>H: repassa o motivo
+        H-->>U: 401 · nao-autenticado, token-invalido ou token-expirado
+    else perfil sem permissão (ex.: analista na fila de leads)
+        F->>C: usuário autenticado
+        C->>H: acesso negado pelo @PreAuthorize
+        H-->>U: 403 · perfil-sem-permissao + linha no log AUDITORIA
+    else recurso de outra concessionária
+        F->>C: usuário autenticado
+        C->>S: perfil permitido
+        S->>H: recurso fora da unidade do usuário
+        H-->>U: 403 · outra-concessionaria + linha no log AUDITORIA
+    else autorizado
+        F->>C: usuário autenticado
+        C->>S: perfil permitido
+        S-->>U: 200 · só os dados da unidade, mascarados conforme o perfil
+    end
+```
+
+| Perfil | Escopo dos dados | Pode |
+|---|---|---|
+| `CONSULTOR` | Só a própria concessionária | Fila de leads e desfecho, clientes, veículos, agendamentos (dados pessoais mascarados) |
+| `GERENTE` | Só a própria concessionária | O mesmo do consultor, com dados completos, e inativar clientes e veículos |
+| `ANALISTA_FORD` | Rede inteira | Ler concessionárias (os indicadores consolidados são da US-36) |
+| `ADMIN` | Rede inteira | Tudo, inclusive cadastrar concessionárias e receber leads do modelo |
 
 ## Stack
 
@@ -30,8 +207,9 @@ API REST que dá suporte à plataforma de retenção de clientes pós-venda da F
 ## Pré-requisitos
 
 - JDK 21
-- MySQL 8 rodando localmente (porta padrão `3306`)
-- Maven 3.9+ (ou use o `mvnw` que vem no repo)
+- MySQL 8 rodando localmente (porta padrão `3306`). No Windows, se o serviço estiver parado:
+  `Start-Service MySQL80` num PowerShell como administrador.
+- Maven 3.9+, ou o `mvnw` que vem no repositório (baixa o Maven sozinho)
 
 ## Como rodar
 
@@ -63,9 +241,9 @@ ou, no Windows:
 mvnw.cmd spring-boot:run
 ```
 
-A API sobe em `http://localhost:8080`. Flyway aplica todas as migrations em
-`src/main/resources/db/migration/` na ordem (V1 → V12) e, no perfil `dev`, também a massa de
-demonstração em `src/main/resources/db/seed/`.
+A API sobe em `http://localhost:8080`. Na primeira execução o Flyway cria todo o schema
+(`db/migration`, V1 a V14) e, no perfil `dev`, carrega a massa de demonstração (`db/seed`, V900 a
+V903). Não é preciso rodar nenhum SQL à mão.
 
 ### 3. Conferir que subiu
 
@@ -73,8 +251,28 @@ demonstração em `src/main/resources/db/seed/`.
 curl http://localhost:8080/actuator/health
 ```
 
-Deve responder `200` com `"status":"UP"`. Em seguida abra o Swagger em
-http://localhost:8080/swagger-ui.html.
+Deve responder `200` com `{"status":"UP"}`.
+
+### 4. Fazer login e chamar um endpoint protegido
+
+**Pelo Swagger** (http://localhost:8080/swagger-ui.html):
+1. Em **Autenticação → POST /api/v1/auth/login**, clique em *Try it out* e envie
+   `{"email":"consultor@ford.com.br","senha":"consultor123"}`.
+2. Copie o `accessToken` da resposta.
+3. Clique em **Authorize** (cadeado no topo), cole o token e confirme.
+4. Chame **GET /api/v1/leads**: a fila de leads da Ford Morumbi, do maior risco para o menor.
+
+**Pelo terminal:**
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"consultor@ford.com.br","senha":"consultor123"}'
+
+curl http://localhost:8080/api/v1/leads -H "Authorization: Bearer <accessToken>"
+```
+
+Sem o header `Authorization`, a mesma chamada responde **401**.
 
 ## Perfis de execução
 
@@ -90,19 +288,20 @@ SPRING_PROFILES_ACTIVE=prod DB_URL=... DB_USER=... DB_PASSWORD=... ./mvnw spring
 
 ## Usuários de demonstração
 
-Criados pelo seed do perfil `dev` (senhas em BCrypt no banco). Serão utilizáveis a partir da US-29,
-quando o endpoint de login existir.
+Criados pela massa de demonstração do perfil `dev` (senhas guardadas em BCrypt).
 
-| E-mail | Senha | Perfil | Concessionária |
-|---|---|---|---|
-| `consultor@ford.com.br` | `consultor123` | CONSULTOR | Ford Morumbi (SP-001) |
-| `consultor.campinas@ford.com.br` | `consultor123` | CONSULTOR | Ford Campinas (SP-014) |
-| `gerente@ford.com.br` | `gerente123` | GERENTE | Ford Morumbi (SP-001) |
-| `analista@ford.com.br` | `analista123` | ANALISTA_FORD | — (rede inteira) |
-| `admin@ford.com.br` | `admin123` | ADMIN | — |
+| E-mail | Senha | Perfil | Concessionária | Bom para mostrar |
+|---|---|---|---|---|
+| `consultor@ford.com.br` | `consultor123` | CONSULTOR | Ford Morumbi (SP-001) | Fluxo principal, dados mascarados |
+| `consultor.campinas@ford.com.br` | `consultor123` | CONSULTOR | Ford Campinas (SP-014) | Fila e carteira de outra unidade |
+| `consultor.poa@ford.com.br` | `consultor123` | CONSULTOR | Ford Porto Alegre (RS-003) | 403 ao abrir clientes e leads de Morumbi |
+| `gerente@ford.com.br` | `gerente123` | GERENTE | Ford Morumbi (SP-001) | Mesmos dados, sem máscara |
+| `analista@ford.com.br` | `analista123` | ANALISTA_FORD | rede inteira | 403 por perfil na fila de leads |
+| `admin@ford.com.br` | `admin123` | ADMIN | rede inteira | Acesso total |
 
-Os dois consultores em unidades diferentes existem de propósito: são eles que provam o escopo de
-dados por concessionária da US-30.
+Consultores de unidades diferentes existem de propósito: são eles que provam o escopo de dados por
+concessionária. O cliente **Carlos Pereira** (id 1) comprou em Morumbi e fez revisão em Campinas,
+então aparece para as duas unidades e dá 403 para Porto Alegre.
 
 ## Testes automatizados
 
@@ -184,20 +383,30 @@ Todos os endpoints estão anotados com `@Operation` e `@Tag`, então o Swagger j
 
 ## Estrutura de pacotes
 
+Um pacote por domínio (*package-by-feature*): tudo o que um serviço precisa fica junto, e o que é
+compartilhado fica em `infra/` e `shared/`.
+
 ```
 br.com.fiap.vinsight_api/
-├── controller/         REST controllers (1 por recurso)
-├── cliente/            Feature package — Cliente
-├── veiculo/            Feature package — Veículo
-├── agendamento/        Feature package — Agendamento
-├── concessionaria/     Feature package — Concessionária
-├── lead/               Feature package — Lead
-├── shared/             Embeddables compartilhados (Endereco, DadosContato, DadosPessoais)
-├── infra/exception/    GlobalExceptionHandler + exceções de domínio
-└── config/             SwaggerConfig, WebConfig (paginação)
+├── usuario/          Auth: login e refresh (AuthController), Usuario e Perfil
+├── cliente/          Customer Service: busca, visão 360°, carteira por relacionamento
+├── veiculo/          Vehicle Service: passaporte por VIN, garantia e revisão derivadas
+├── lead/             Lead Engine: fila priorizada, desfecho, supressão LGPD
+├── agendamento/      Agendamentos por concessionária
+├── concessionaria/   Unidades da rede Ford
+├── ordemservico/     Histórico de serviço (base da visão 360° e do passaporte)
+├── infra/
+│   ├── security/     JWT (TokenService, SecurityFilter), escopo (ContextoSeguranca),
+│   │                 mascaramento (MascaradorDados) e auditoria (AuditoriaAcesso)
+│   ├── exception/    GlobalExceptionHandler e catálogo de erros RFC 7807 (TipoProblema)
+│   ├── idempotencia/ Idempotency-Key (ServicoIdempotencia)
+│   └── web/          CorrelationIdFilter
+├── shared/           Embeddables (Endereco, DadosContato, DadosPessoais), DadosPagina, FusoHorario
+└── config/           Swagger, relógio (Clock) e suporte à paginação
 ```
 
-Cada feature package contém: `Entity`, `Repository`, DTOs (records), `Service`, e seus enums quando aplicável.
+Cada pacote de domínio contém: `Controller`, `Service`, `Repository`, entidades, DTOs (records
+`Dados*`) e seus enums.
 
 ## Endpoints — visão geral
 
@@ -290,43 +499,50 @@ Detalhes completos de cada endpoint (request/response, validações, exemplos) e
 
 ## Tratamento de erros
 
-Todas as exceções passam pelo [`GlobalExceptionHandler`](src/main/java/br/com/fiap/vinsight_api/infra/exception/GlobalExceptionHandler.java) (`@RestControllerAdvice`), que retorna JSON padronizado:
+Toda resposta de erro, em qualquer endpoint, sai no formato **Problem Details (RFC 7807)**, com
+`Content-Type: application/problem+json`. Quem monta a resposta é sempre o
+[`GlobalExceptionHandler`](src/main/java/br/com/fiap/vinsight_api/infra/exception/GlobalExceptionHandler.java),
+inclusive nos 401 do filtro de segurança.
 
 ```json
 {
-  "timestamp": "2026-05-19T10:30:00",
-  "status": 404,
-  "erro": "Not Found",
-  "mensagem": "Cliente com id 99 não encontrado.",
-  "detalhes": null
+  "type": "https://vinsight.ford/errors/validacao",
+  "title": "Erro de validação",
+  "status": 422,
+  "detail": "Um ou mais campos estão inválidos.",
+  "instance": "/api/v1/agendamentos",
+  "timestamp": "2026-09-23T00:46:35.202Z",
+  "correlationId": "d76270af-d785-49dc-bd33-8a9feb28ff5d",
+  "violacoes": [ { "campo": "tipoServico", "mensagem": "valor não permitido. Aceitos: REVISAO_PROGRAMADA, TROCA_OLEO, REPARO, GARANTIA, RECALL" } ]
 }
 ```
 
-Em validações de body, o campo `detalhes` traz a lista de campos inválidos:
-
-```json
-{
-  "timestamp": "2026-05-19T10:30:00",
-  "status": 400,
-  "erro": "Bad Request",
-  "mensagem": "Dados inválidos",
-  "detalhes": [
-    { "campo": "dadosPessoais.cpf", "mensagem": "must match \"\\d{11}\"" }
-  ]
-}
-```
+- **`type`** identifica a situação e é estável: o app trata o erro por ele, nunca pelo texto.
+- **`detail`** e **`violacoes[].mensagem`** vêm em português e podem ir direto para a tela.
+- **`correlationId`** é o mesmo do header `X-Correlation-Id` e da linha do log do servidor.
+- **500** traz só "Erro inesperado. Informe o correlationId ao suporte.": nada de stack trace ou
+  nome de classe. O detalhe fica no log.
 
 ### Tabela de códigos HTTP
 
-| HTTP | Cenário |
-|---|---|
-| 200 | OK (GET, PUT, PATCH com sucesso) |
-| 201 | Criado (POST com sucesso — retorna `Location` header) |
-| 204 | Sem conteúdo (DELETE com sucesso) |
-| 400 | Bad Request — validação de body (`@Valid`) |
-| 404 | Not Found — `EntidadeNaoEncontradaException` |
-| 409 | Conflict — `RegraNegocioException` (ex: CPF/CNPJ/VIN duplicado, regras de negócio violadas) ou violação de integridade |
-| 500 | Internal Server Error — fallback genérico |
+| HTTP | `type` | Quando |
+|---|---|---|
+| 200 | — | Leitura ou atualização com sucesso |
+| 201 | — | Criação com sucesso, com header `Location` |
+| 204 | — | Remoção (inativação) com sucesso |
+| 400 | `requisicao-invalida` | JSON malformado, parâmetro de URL com tipo errado, `?sort=` com campo inexistente |
+| 401 | `nao-autenticado` | Rota protegida sem token |
+| 401 | `token-expirado` · `token-invalido` | Token vencido, adulterado, ou refresh usado no lugar do access |
+| 401 | `credenciais-invalidas` | Login errado (e-mail inexistente dá a mesma resposta) |
+| 403 | `perfil-sem-permissao` | O perfil não pode usar o endpoint |
+| 403 | `outra-concessionaria` | O recurso é de outra unidade |
+| 404 | `nao-encontrado` | Recurso ou rota inexistente |
+| 405 | `metodo-nao-permitido` | Verbo HTTP não suportado na rota |
+| 409 | `conflito` | Regra de negócio (ex.: lead já encerrado) ou registro duplicado (CPF, VIN, placa) |
+| 422 | `validacao` | Campo obrigatório ausente, formato inválido ou valor fora do enum, com a lista de `violacoes` |
+| 500 | `erro-interno` | Falha inesperada, com mensagem genérica |
+
+O `type` completo é `https://vinsight.ford/errors/<código>`.
 
 ## Banco de dados
 
@@ -376,12 +592,51 @@ Se regerar **depois** de o seed já ter sido aplicado, o checksum muda e o Flywa
 
 ## Decisões de projeto
 
-- **MySQL em todos os perfis, sem H2** — banco real local, o mesmo ecossistema usado na faculdade. O isolamento dos testes vem de um **schema separado** (`vinsight_test`), não de um banco in-memory: os testes exercitam as migrations e o dialeto de verdade.
-- **Seed separado das migrations** — `db/migration` é schema, `db/seed` é dado de demonstração. Só o perfil `dev` lê o segundo.
-- **Embeddables como classes Lombok** (não records) — JPA 3.x não suporta records como `@Embeddable`. Records ficam só nos DTOs.
-- **Soft delete em todas as features** — `ativo=false` em Cliente/Concessionária, mudança de `status` em Veículo/Agendamento. Histórico nunca é perdido.
-- **FKs `LAZY` + métodos de service `@Transactional`** — evita N+1 nas listagens; DTO constructors acessam FKs dentro da transação.
-- **`@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)`** — envelope de paginação estável (não expõe campos internos de `PageImpl`).
-- **DTOs aninhados (`ClienteResumo`, `VeiculoResumo`, ...)** — em responses detalhe, evita JSON gigante e ciclos.
+**Segurança e acesso**
+
+- **JWT stateless no padrão da disciplina** — `TokenService` + `SecurityFilter` (`OncePerRequestFilter`)
+  + `@EnableMethodSecurity`, com as regras de perfil em `@PreAuthorize` em cada endpoint. Sem sessão
+  no servidor.
+- **Access e refresh diferenciados pela claim `tipo`** — um refresh token vazado não serve para
+  chamar a API, e um access token não renova a sessão.
+- **Token inválido não barra a requisição no filtro** — ela segue sem usuário e quem responde o 401
+  é o `AutenticacaoEntryPoint`. Assim as rotas públicas (como o `/auth/refresh`) continuam
+  funcionando mesmo que o app mande junto um token vencido.
+- **Escopo por concessionária no service, a partir do token** — o `@PreAuthorize` decide *qual
+  perfil* acessa; o `ContextoSeguranca` decide *quais dados* ele vê. A unidade nunca vem de
+  parâmetro da requisição.
+- **Carteira por relacionamento** — um cliente pertence a toda concessionária com que tem vínculo
+  (cadastro, compra, serviço ou agendamento). Amarrar à unidade de compra impediria atender um carro
+  vendido por outra unidade, e liberar a rede inteira quebraria o escopo.
+- **Mascaramento no backend** — o app nunca desmascara. Um valor mascarado reenviado num PUT é
+  recusado (422), para não sobrescrever o dado real.
+
+**Contrato REST**
+
+- **Erros em RFC 7807** — `type` estável por situação (`token-expirado`, `outra-concessionaria`...),
+  para o app tratar erro pelo código e não pelo texto. Validação responde 422; 500 nunca expõe
+  stack trace.
+- **Envelope de paginação próprio (`DadosPagina`)** — campos planos na raiz (`page`, `size`,
+  `totalElements`, `totalPages`), como no contrato, sem depender do formato interno do Spring.
+- **Status derivados na leitura** — faixa de risco do lead, status da garantia e situação da revisão
+  são calculados a partir do score e das datas, nunca gravados. Não ficam desatualizados.
+- **`Idempotency-Key` no desfecho do lead** — o app reenvia a ação depois de uma queda de rede sem
+  duplicar o registro.
+
+**Dados**
+
+- **MySQL em todos os perfis, sem H2** — banco real local, o mesmo ecossistema usado na faculdade. O
+  isolamento dos testes vem de um **schema separado** (`vinsight_test`), não de um banco in-memory:
+  os testes exercitam as migrations e o dialeto de verdade.
+- **Seed separado das migrations** — `db/migration` é schema; `db/seed` é dado de demonstração, lido
+  só pelo perfil `dev`. Correções da massa entram como `V9xx`, depois da V900, sem editar o que já
+  foi aplicado.
+- **Embeddables como classes Lombok** (não records) — JPA 3.x não suporta records como `@Embeddable`.
+  Records ficam só nos DTOs.
+- **Soft delete** — `ativo=false` em Cliente e Concessionária, mudança de `status` em Veículo e
+  Agendamento. Histórico nunca é perdido.
+- **FKs `LAZY` + consultas com `JOIN FETCH`** — evita N+1 nas listagens, como na fila de leads.
+- **Histórico de desfechos imutável** — cada contato vira uma linha em `desfechos_lead`, com autor e
+  data: é a base do retreinamento do modelo.
 
 Challenge FIAP 2026 — Ford Motor Company — Grupo 02.
